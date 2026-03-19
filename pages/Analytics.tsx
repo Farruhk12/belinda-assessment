@@ -3,7 +3,7 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { useStore } from '../context/StoreContext';
 import { QuestionType, Question } from '../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import { TrendingUp, Users, Target, ShieldAlert, MapPin, Briefcase, Award, AlertTriangle, ArrowUpRight, ArrowDownRight, ChevronRight, Medal, History, Zap, AlertCircle, X } from 'lucide-react';
+import { TrendingUp, Users, Target, ShieldAlert, MapPin, Briefcase, Award, AlertTriangle, ArrowUpRight, ArrowDownRight, ChevronRight, Medal, History, Zap, X } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
 export const Analytics: React.FC = () => {
@@ -29,16 +29,17 @@ export const Analytics: React.FC = () => {
     let baseEmployees = employees;
 
     if (currentRole === 'manager' && currentUser) {
-      const mgrAreaNorm = (currentUser.managedArea || currentUser.area || "").toLowerCase().trim();
+      const managedAreasNorm = (currentUser.managedAreas || (currentUser.managedArea ? [currentUser.managedArea] : [])).map(a => a.toLowerCase().trim());
       const mgrGroupNorm = (currentUser.group || "").toLowerCase().trim();
       const managedGroupsNorm = (currentUser.managedGroups || []).map(g => g.toLowerCase().trim());
       const hasDefinedGroups = managedGroupsNorm.length > 0;
+      const hasDefinedAreas = managedAreasNorm.length > 0;
 
       baseEmployees = employees.filter(emp => {
         if (String(emp.id) === String(currentUser.id)) return false;
         const empAreaNorm = (emp.area || "").toLowerCase().trim();
         const empGroupNorm = (emp.group || "").toLowerCase().trim();
-        const matchesArea = !currentUser.managedArea || empAreaNorm === mgrAreaNorm;
+        const matchesArea = !hasDefinedAreas || managedAreasNorm.includes(empAreaNorm);
         let matchesGroup = hasDefinedGroups ? managedGroupsNorm.includes(empGroupNorm) : empGroupNorm === mgrGroupNorm;
         return matchesArea && matchesGroup;
       });
@@ -222,40 +223,6 @@ export const Analytics: React.FC = () => {
     return { text: `Требуется дополнительное обучение. ${parts.join('. ')}`, type: 'low' as const, details: { lowGroupsData, lowEmployees } };
   }, [filteredResults.length, kpis.avg, departmentChartData, allParticipants]);
 
-  const isAnswerCorrect = (r: typeof filteredResults[0], q: Question): boolean => {
-    const userAnswer = r.answers[q.id];
-    if (q.type === QuestionType.OPEN_ENDED || q.type === QuestionType.RANGE) {
-      return (r.manualScores?.[q.id] ?? 0) >= 3;
-    }
-    const userAnsArr = (userAnswer as number[]) || [];
-    const correctArr = q.correctAnswers || [];
-    if (q.type === QuestionType.SINGLE_CHOICE) return userAnsArr[0] === correctArr[0];
-    return userAnsArr.length === correctArr.length && userAnsArr.every(v => correctArr.includes(v));
-  };
-
-  const weakSpots = useMemo(() => {
-    const agg: Record<string, { question: Question; total: number; correct: number; quizTitle: string }> = {};
-    const completed = filteredResults.filter(r => r.status === 'completed' && (r.violations || 0) <= 3);
-    completed.forEach(r => {
-      let questions: Question[] = r.questions || [];
-      if (questions.length === 0) {
-        const quiz = sessions?.find(s => String(s.id) === String(r.quizId)) || quizzes?.find(q => String(q.id) === String(r.quizId));
-        questions = quiz?.questions || [];
-      }
-      questions.forEach(q => {
-        const key = `${r.quizId}-${q.id}`;
-        if (!agg[key]) agg[key] = { question: q, total: 0, correct: 0, quizTitle: r.quizTitle };
-        agg[key].total++;
-        if (isAnswerCorrect(r, q)) agg[key].correct++;
-      });
-    });
-    return Object.values(agg)
-      .filter(x => x.total >= 2)
-      .map(x => ({ ...x, rate: Math.round((x.correct / x.total) * 100) }))
-      .sort((a, b) => a.rate - b.rate)
-      .slice(0, 10);
-  }, [filteredResults, sessions, quizzes]);
-
   return (
     <div className="space-y-6 animate-fade-in pb-20">
       <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm space-y-6">
@@ -413,7 +380,7 @@ export const Analytics: React.FC = () => {
           </h3>
           <span className="text-[9px] font-bold text-gray-400">{allParticipants.length} чел.</span>
         </div>
-        <div className="max-h-[400px] overflow-y-auto custom-scrollbar">
+        <div>
           <table className="w-full text-left text-[10px]">
             <thead className="bg-gray-50/50 sticky top-0">
               <tr>
@@ -447,32 +414,6 @@ export const Analytics: React.FC = () => {
           <div className="p-12 text-center text-gray-400 text-[10px] font-black uppercase">Нет данных по выбранным фильтрам</div>
         )}
       </div>
-
-      {weakSpots.length > 0 && (
-        <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
-          <div className="p-4 bg-gray-50/50 dark:bg-gray-800/50 border-b dark:border-gray-700">
-            <h3 className="text-[9px] font-black text-brand-secondary uppercase tracking-widest flex items-center gap-2">
-              <AlertCircle size={14} className="text-brand-primary" /> Анализ слабых мест
-            </h3>
-            <p className="text-[9px] text-gray-400 dark:text-gray-500 mt-1">Вопросы с наименьшим процентом правильных ответов (минимум 2 попытки)</p>
-          </div>
-          <div className="divide-y divide-gray-50 dark:divide-gray-700">
-            {weakSpots.map((item, idx) => (
-              <div key={`${item.quizTitle}-${item.question.id}`} className="p-4 hover:bg-gray-50/50 dark:hover:bg-gray-800/30 transition-all">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1">{item.quizTitle}</p>
-                    <p className="text-sm font-bold text-brand-secondary dark:text-gray-200 line-clamp-2">{item.question.text}</p>
-                  </div>
-                  <div className={`shrink-0 px-3 py-1 rounded-lg text-[10px] font-black ${item.rate < 50 ? 'bg-red-50 dark:bg-red-900/30 text-brand-primary' : item.rate < 60 ? 'bg-amber-50 dark:bg-amber-900/30 text-amber-600' : 'bg-green-50 dark:bg-green-900/30 text-green-600'}`}>
-                    {item.rate}% ({item.correct}/{item.total})
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       {showRiskGroupModal && (
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowRiskGroupModal(false)}>

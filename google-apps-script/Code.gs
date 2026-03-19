@@ -8,7 +8,7 @@ function setup() {
     'Quizzes': ['id', 'title', 'description', 'category', 'group', 'product', 'createdAt', 'questions', 'caseIds', 'passThreshold', 'tags', 'isSession', 'isArchived'],
     'Sessions': ['id', 'title', 'description', 'category', 'group', 'product', 'createdAt', 'questions', 'timeLimit', 'availableFrom', 'availableUntil', 'passThreshold', 'isSession', 'isArchived'],
     'Results': ['id', 'quizId', 'quizTitle', 'userId', 'score', 'maxPossibleScore', 'percentage', 'date', 'status', 'answers', 'questions', 'manualScores', 'manualComments', 'violations', 'violationDetails', 'timeSpent'],
-    'Employees': ['id', 'fullName', 'login', 'password', 'group', 'area', 'positionId', 'role', 'managedArea', 'managedGroups', 'createdAt'],
+    'Employees': ['id', 'fullName', 'login', 'password', 'group', 'area', 'positionId', 'role', 'managedArea', 'managedAreas', 'managedGroups', 'createdAt'],
     'Positions': ['id', 'name'],
     'Assignments': ['id', 'quizId', 'targetType', 'targetArea', 'targetGroup', 'targetEmployeeId', 'assignedAt', 'isRetake']
   };
@@ -54,6 +54,7 @@ function doGet() {
 }
 
 function doPost(e) {
+  setup();
   const params = JSON.parse(e.postData.contents);
   const action = params.action;
   const sheetName = params.sheet;

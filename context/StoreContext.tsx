@@ -72,7 +72,26 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         if (data.sessions) setSessions(data.sessions.map(normalizeQuiz));
         if (data.results) setResults(data.results);
         if (data.employees) {
-          setEmployees(data.employees);
+          const normalizeEmployee = (e: any): Employee => ({
+            ...e,
+            managedAreas: Array.isArray(e.managedAreas) ? e.managedAreas : (typeof e.managedAreas === 'string' ? (() => { try { const p = JSON.parse(e.managedAreas); return Array.isArray(p) ? p : []; } catch { return []; } })() : (e.managedArea ? [e.managedArea] : [])),
+            managedGroups: Array.isArray(e.managedGroups) ? e.managedGroups : (typeof e.managedGroups === 'string' ? (() => { try { const p = JSON.parse(e.managedGroups); return Array.isArray(p) ? p : []; } catch { return []; } })() : [])
+          });
+          let employeesList = data.employees.map(normalizeEmployee);
+          try {
+            const cached = JSON.parse(localStorage.getItem('belinda_employees_cache') || '{}');
+            const cacheKeys = Object.keys(cached);
+            if (cacheKeys.length > 0) {
+              employeesList = employeesList.map((emp: Employee) => {
+                const c = cached[emp.id];
+                if (c && c._updated) {
+                  return { ...emp, managedAreas: c.managedAreas ?? emp.managedAreas, managedGroups: c.managedGroups ?? emp.managedGroups };
+                }
+                return emp;
+              });
+            }
+          } catch (_) {}
+          setEmployees(employeesList);
           const savedId = localStorage.getItem('skillcheck_user_id');
           if (savedId) {
             const user = data.employees.find((e: Employee) => String(e.id) === String(savedId));
@@ -107,12 +126,20 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const syncToSheets = async (action: 'save' | 'delete', sheet: string, data: any, id?: string) => {
     if (!sheetsUrl) return;
     try {
+      const body = JSON.stringify({ action, sheet, data, id });
       await fetch(sheetsUrl, {
         method: 'POST',
         mode: 'no-cors',
         headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify({ action, sheet, data, id })
+        body
       });
+      if (sheet === 'Employees' && data?.id) {
+        try {
+          const cached = JSON.parse(localStorage.getItem('belinda_employees_cache') || '{}');
+          cached[data.id] = { ...data, _updated: Date.now() };
+          localStorage.setItem('belinda_employees_cache', JSON.stringify(cached));
+        } catch (_) {}
+      }
     } catch (e) {
       console.error("Sync Error:", e);
     }

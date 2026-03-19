@@ -12,21 +12,19 @@ export const ManagerTeam: React.FC = () => {
   if (!currentUser || currentUser.role !== 'manager') return null;
 
   const teamMembers = useMemo(() => {
-    // Нормализуем данные менеджера один раз для производительности
-    const mgrAreaNorm = (currentUser.managedArea || currentUser.area || "").toLowerCase().trim();
+    const managedAreasNorm = (currentUser.managedAreas || (currentUser.managedArea ? [currentUser.managedArea] : [])).map(a => a.toLowerCase().trim());
     const mgrGroupNorm = (currentUser.group || "").toLowerCase().trim();
     const managedGroupsNorm = (currentUser.managedGroups || []).map(g => g.toLowerCase().trim());
     const hasDefinedGroups = managedGroupsNorm.length > 0;
+    const hasDefinedAreas = managedAreasNorm.length > 0;
 
     return employees.filter(emp => {
-      // 1. Исключаем самого менеджера
       if (String(emp.id) === String(currentUser.id)) return false;
       
       const empAreaNorm = (emp.area || "").toLowerCase().trim();
       const empGroupNorm = (emp.group || "").toLowerCase().trim();
 
-      // 2. Фильтр по Области (регистронезависимый)
-      const matchesArea = !currentUser.managedArea || empAreaNorm === mgrAreaNorm;
+      const matchesArea = !hasDefinedAreas || managedAreasNorm.includes(empAreaNorm);
       
       // 3. Фильтр по Группе (регистронезависимый)
       let matchesGroup = false;
@@ -68,7 +66,7 @@ export const ManagerTeam: React.FC = () => {
         <div className="flex gap-4">
           <div className="text-center">
             <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-1">Область</p>
-            <p className="bg-white/10 px-3 py-1 rounded-lg font-black text-[10px] uppercase border border-white/10">{currentUser.managedArea || currentUser.area || 'Все'}</p>
+            <p className="bg-white/10 px-3 py-1 rounded-lg font-black text-[10px] uppercase border border-white/10">{(currentUser.managedAreas && currentUser.managedAreas.length > 0) ? currentUser.managedAreas.join(', ') : (currentUser.managedArea || currentUser.area || 'Все')}</p>
           </div>
           <div className="text-center">
             <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-1">Доступно групп</p>

@@ -9,23 +9,37 @@ export const EmployeeList: React.FC = () => {
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedPosition, setSelectedPosition] = useState('all');
+  const [selectedRole, setSelectedRole] = useState<string>('all');
+  const [selectedAreas, setSelectedAreas] = useState<string[]>([]);
+
+  const allAreas = React.useMemo(() => 
+    Array.from(new Set(employees.map(e => e.area.trim()))).filter(Boolean).sort(),
+    [employees]
+  );
 
   const filteredEmployees = employees.filter(emp => {
     const fullName = String(emp.fullName || '').toLowerCase();
     const login = String(emp.login || '').toLowerCase();
     const group = String(emp.group || '').toLowerCase();
     const searchLower = searchTerm.toLowerCase();
+    const areaMatch = selectedAreas.length === 0 || selectedAreas.includes(emp.area.trim());
+    const roleMatch = selectedRole === 'all' || emp.role === selectedRole;
 
     return (fullName.includes(searchLower) || login.includes(searchLower) || group.includes(searchLower)) && 
-           (selectedPosition === 'all' || emp.positionId === selectedPosition);
+           (selectedPosition === 'all' || emp.positionId === selectedPosition) &&
+           roleMatch && areaMatch;
   });
+
+  const toggleArea = (area: string) => {
+    setSelectedAreas(prev => prev.includes(area) ? prev.filter(a => a !== area) : [...prev, area]);
+  };
 
   return (
     <div className="space-y-6 animate-fade-in pb-12">
       <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col md:flex-row justify-between items-center gap-4">
         <div>
           <h2 className="text-xl font-black text-brand-secondary tracking-tight">Сотрудники <span className="text-brand-primary">Belinda</span></h2>
-          <p className="text-gray-400 text-[10px] font-bold uppercase tracking-widest">Управление кадрами</p>
+          <p className="text-gray-400 text-[10px] font-bold uppercase tracking-widest">Добавление и редактирование. Результаты и активность — в разделе Аналитика</p>
         </div>
         <button 
           onClick={() => navigate('/employees/new')}
@@ -36,25 +50,64 @@ export const EmployeeList: React.FC = () => {
         </button>
       </div>
 
-      <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex flex-col md:flex-row gap-3 items-center">
-        <div className="relative flex-1 w-full">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300" size={16} />
-          <input 
-            type="text"
-            placeholder="Поиск по ФИО, логину или отделу..."
-            className="w-full pl-11 pr-4 py-2 bg-gray-50 rounded-xl outline-none focus:bg-white focus:ring-1 focus:ring-brand-primary transition-all font-bold text-xs"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
+      <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm space-y-4">
+        <div className="flex flex-col md:flex-row gap-3 items-center">
+          <div className="relative flex-1 w-full">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300" size={16} />
+            <input 
+              type="text"
+              placeholder="Поиск по ФИО, логину или отделу..."
+              className="w-full pl-11 pr-4 py-2 bg-gray-50 rounded-xl outline-none focus:bg-white focus:ring-1 focus:ring-brand-primary transition-all font-bold text-xs"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+          <select 
+            value={selectedPosition}
+            onChange={(e) => setSelectedPosition(e.target.value)}
+            className="bg-gray-50 px-4 py-2 rounded-xl outline-none font-black text-[9px] text-brand-secondary uppercase tracking-wider w-full md:w-auto"
+          >
+            <option value="all">Все должности</option>
+            {positions.map(pos => <option key={pos.id} value={pos.id}>{pos.name}</option>)}
+          </select>
+          <select 
+            value={selectedRole}
+            onChange={(e) => setSelectedRole(e.target.value)}
+            className="bg-gray-50 px-4 py-2 rounded-xl outline-none font-black text-[9px] text-brand-secondary uppercase tracking-wider w-full md:w-auto"
+          >
+            <option value="all">Все роли</option>
+            <option value="employee">Сотрудник</option>
+            <option value="manager">Менеджер</option>
+            <option value="admin">Админ</option>
+          </select>
         </div>
-        <select 
-          value={selectedPosition}
-          onChange={(e) => setSelectedPosition(e.target.value)}
-          className="bg-gray-50 px-4 py-2 rounded-xl outline-none font-black text-[9px] text-brand-secondary uppercase tracking-wider w-full md:w-auto"
-        >
-          <option value="all">Все должности</option>
-          {positions.map(pos => <option key={pos.id} value={pos.id}>{pos.name}</option>)}
-        </select>
+        {allAreas.length > 0 && (
+          <div>
+            <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-2">Области (выберите несколько)</p>
+            <div className="flex flex-wrap gap-2">
+              {allAreas.map(area => {
+                const isSelected = selectedAreas.includes(area);
+                return (
+                  <button
+                    key={area}
+                    onClick={() => toggleArea(area)}
+                    className={`px-3 py-1.5 rounded-lg text-[9px] font-bold transition-all border ${isSelected ? 'bg-brand-primary text-white border-brand-primary' : 'bg-gray-50 text-gray-500 border-gray-100 hover:bg-gray-100'}`}
+                  >
+                    {area}
+                  </button>
+                );
+              })}
+              {selectedAreas.length > 0 && (
+                <button
+                  onClick={() => setSelectedAreas([])}
+                  className="px-3 py-1.5 rounded-lg text-[9px] font-bold text-gray-400 hover:text-brand-primary transition-colors"
+                >
+                  Сбросить
+                </button>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">

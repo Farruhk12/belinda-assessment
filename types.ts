@@ -66,6 +66,7 @@ export interface Employee {
   positionId: string;
   role: 'admin' | 'employee' | 'manager'; 
   managedArea?: string;      
+  managedAreas?: string[];   
   managedGroups?: string[];  
   createdAt: number;
 }

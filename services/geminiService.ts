@@ -207,3 +207,86 @@ ${userAnswer || '(пусто)'}
     throw error;
   }
 };
+
+export interface EmployeeAnalyticsReport {
+  strengths: string[];
+  weaknesses: string[];
+  recommendations: string[];
+}
+
+export interface QuestionPerformance {
+  questionText: string;
+  quizTitle: string;
+  correct: boolean;
+  score?: number;
+  maxScore?: number;
+}
+
+/** Генерирует краткую аналитику по результатам сотрудника: сильные стороны, слабые, рекомендации */
+export const generateEmployeeAnalytics = async (
+  employeeName: string,
+  avgScore: number,
+  questionPerformances: QuestionPerformance[]
+): Promise<EmployeeAnalyticsReport> => {
+  const apiKey = process.env.API_KEY || process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    throw new Error("GEMINI_API_KEY не настроен");
+  }
+
+  const ai = new GoogleGenAI({ apiKey });
+
+  const performanceSummary = questionPerformances.map((p, i) => {
+    const status = p.correct ? "верно" : (p.score !== undefined ? `балл ${p.score}/${p.maxScore ?? 5}` : "неверно");
+    const qText = p.questionText.length > 120 ? p.questionText.substring(0, 120) + "..." : p.questionText;
+    return `${i + 1}. [${p.quizTitle}] ${qText} — ${status}`;
+  }).join("\n");
+
+  const prompt = `
+Ты — эксперт по обучению персонала. Проанализируй результаты аттестаций сотрудника и составь краткий отчёт.
+
+Сотрудник: ${employeeName}
+Средний балл: ${avgScore}%
+
+Детализация по вопросам:
+---
+${performanceSummary || "(нет данных по отдельным вопросам)"}
+---
+
+Задача: составь КРАТКИЙ отчёт на русском языке (2–4 пункта в каждом блоке).
+
+1. strengths — в каких темах/вопросах сотрудник силён (где отвечал верно).
+2. weaknesses — в каких темах/вопросах слаб (ошибки, низкие баллы).
+3. recommendations — конкретные рекомендации: на что сделать акцент, что повторить, что изучить.
+
+Будь конкретным: ссылайся на темы из вопросов. Пиши кратко, по делу.
+`;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-2.0-flash",
+      contents: [{ parts: [{ text: prompt }] }],
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            strengths: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Сильные стороны, 2-4 пункта" },
+            weaknesses: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Слабые стороны, 2-4 пункта" },
+            recommendations: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Рекомендации, 2-4 пункта" }
+          },
+          required: ["strengths", "weaknesses", "recommendations"]
+        }
+      }
+    });
+
+    const parsed = JSON.parse(response.text || "{}");
+    return {
+      strengths: Array.isArray(parsed.strengths) ? parsed.strengths.filter(Boolean) : [],
+      weaknesses: Array.isArray(parsed.weaknesses) ? parsed.weaknesses.filter(Boolean) : [],
+      recommendations: Array.isArray(parsed.recommendations) ? parsed.recommendations.filter(Boolean) : []
+    };
+  } catch (error) {
+    console.error("Gemini Analytics Error:", error);
+    throw error;
+  }
+};

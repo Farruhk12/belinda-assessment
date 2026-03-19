@@ -2,11 +2,12 @@
 import React from 'react';
 import { useStore } from '../context/StoreContext';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { CheckCircle2, XCircle, Hourglass, ExternalLink, Award, Target, TrendingUp, ShieldAlert } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { CheckCircle2, XCircle, Hourglass, ExternalLink, Award, Target, TrendingUp, ShieldAlert, Sparkles } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
 
 export const Results: React.FC = () => {
   const { results, currentUser, sessions, quizzes } = useStore();
+  const navigate = useNavigate();
   const getPassThreshold = (quizId: string) => {
     const s = sessions?.find(s => String(s.id) === String(quizId));
     const q = quizzes?.find(q => String(q.id) === String(quizId));
@@ -31,9 +32,17 @@ export const Results: React.FC = () => {
           <h2 className="text-lg md:text-xl font-black text-brand-secondary uppercase tracking-tight leading-none">Мои <span className="text-brand-primary">результаты</span></h2>
           <p className="text-[8px] md:text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">Belinda Assessment Center</p>
         </div>
-        <div className="bg-gray-50 px-3 py-1.5 rounded-xl border flex items-center gap-2">
-           <Award className="text-brand-primary" size={14} />
-           <span className="text-[9px] font-black uppercase text-brand-secondary">Топ-баллы: {myResults.filter(r=>r.percentage>=90 && (r.violations || 0) <= 3).length}</span>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => currentUser && navigate(`/employees/${currentUser.id}/results`)}
+            className="px-4 py-2 bg-brand-primary/10 text-brand-primary rounded-xl font-bold text-[9px] uppercase tracking-widest hover:bg-brand-primary hover:text-white transition-all flex items-center gap-2"
+          >
+            <Sparkles size={12} /> Личный прогресс и ИИ-аналитика
+          </button>
+          <div className="bg-gray-50 px-3 py-1.5 rounded-xl border flex items-center gap-2">
+             <Award className="text-brand-primary" size={14} />
+             <span className="text-[9px] font-black uppercase text-brand-secondary">Топ-баллы: {myResults.filter(r=>r.percentage>=90 && (r.violations || 0) <= 3).length}</span>
+          </div>
         </div>
       </div>
 

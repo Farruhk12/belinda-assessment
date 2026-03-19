@@ -20,7 +20,7 @@ export const EmployeeForm: React.FC = () => {
   const [role, setRole] = useState<'admin' | 'employee' | 'manager'>('employee');
   
   // Дополнительные поля для менеджера
-  const [managedArea, setManagedArea] = useState('');
+  const [managedAreas, setManagedAreas] = useState<string[]>([]);
   const [managedGroups, setManagedGroups] = useState<string[]>([]);
   
   const [showPosManager, setShowPosManager] = useState(false);
@@ -45,7 +45,7 @@ export const EmployeeForm: React.FC = () => {
         setArea(emp.area);
         setPositionId(emp.positionId);
         setRole(emp.role || 'employee');
-        setManagedArea(emp.managedArea || '');
+        setManagedAreas(emp.managedAreas ?? (emp.managedArea ? [emp.managedArea] : []));
         setManagedGroups(emp.managedGroups || []);
       }
     }
@@ -60,7 +60,7 @@ export const EmployeeForm: React.FC = () => {
     const employeeData: Employee = {
       id: isEditing ? id : `emp-${Date.now()}`,
       fullName, login, password, group, area, positionId, role,
-      managedArea: role === 'manager' ? managedArea : undefined,
+      managedAreas: role === 'manager' ? managedAreas : undefined,
       managedGroups: role === 'manager' ? managedGroups : undefined,
       createdAt: isEditing ? (employees.find(e => e.id === id)?.createdAt || Date.now()) : Date.now()
     };
@@ -73,6 +73,12 @@ export const EmployeeForm: React.FC = () => {
   const toggleManagedGroup = (g: string) => {
     setManagedGroups(prev => 
       prev.includes(g) ? prev.filter(item => item !== g) : [...prev, g]
+    );
+  };
+
+  const toggleManagedArea = (a: string) => {
+    setManagedAreas(prev => 
+      prev.includes(a) ? prev.filter(item => item !== a) : [...prev, a]
     );
   };
 
@@ -118,15 +124,24 @@ export const EmployeeForm: React.FC = () => {
               </h3>
               <div className="space-y-5">
                 <div>
-                  <label className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-1 block">Контролируемая область</label>
-                  <select 
-                    value={managedArea} 
-                    onChange={(e) => setManagedArea(e.target.value)}
-                    className="w-full bg-white/10 border-none rounded-xl px-4 py-3 focus:ring-1 focus:ring-brand-primary outline-none font-bold text-xs text-white appearance-none"
-                  >
-                    <option value="" className="text-brand-secondary">Выберите область...</option>
-                    {allAreas.map(a => <option key={a} value={a} className="text-brand-secondary">{a}</option>)}
-                  </select>
+                  <label className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-1 block">Контролируемые области (выберите несколько)</label>
+                  <div className="grid grid-cols-2 gap-2 max-h-32 overflow-y-auto p-1 pr-2 custom-scrollbar">
+                    {allAreas.map(a => {
+                      const isSelected = managedAreas.includes(a);
+                      return (
+                        <button 
+                          key={a}
+                          onClick={() => toggleManagedArea(a)}
+                          type="button"
+                          className={`flex items-center justify-between px-3 py-2 rounded-lg text-[10px] font-bold transition-all border ${isSelected ? 'bg-brand-primary border-brand-primary text-white' : 'bg-white/5 border-white/5 text-gray-400 hover:bg-white/10'}`}
+                        >
+                          <span className="truncate pr-2">{a}</span>
+                          {isSelected && <CheckCircle2 size={12} />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {allAreas.length === 0 && <p className="text-[9px] text-gray-500 italic">Сначала создайте сотрудников с указанием областей.</p>}
                 </div>
                 <div>
                   <label className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-1 block">Контролируемые группы (выберите несколько)</label>

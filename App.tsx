@@ -75,7 +75,10 @@ const AppRoutes: React.FC = () => {
 
         {/* Маршруты Сотрудника */}
         {role === 'employee' && (
-          <Route path="*" element={<Navigate to="/active" replace />} />
+          <>
+            <Route path="/employees/:id/results" element={<EmployeeDetailResults />} />
+            <Route path="*" element={<Navigate to="/active" replace />} />
+          </>
         )}
       </Routes>
     </Layout>

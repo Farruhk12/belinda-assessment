@@ -22,7 +22,6 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     { name: 'Проверка', href: '/review', icon: ClipboardCheck },
     { name: 'Аналитика', href: '/analytics', icon: PieChart },
     { name: 'Валидация', href: '/validation', icon: BarChartBig },
-    { name: 'Сотрудники', href: '/employees', icon: Users },
   ];
 
   const managerNav = [
@@ -87,21 +86,37 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                   key={item.name}
                   to={item.href}
                   onClick={() => setIsMobileMenuOpen(false)}
-                  className={`
-                    flex items-center gap-3 px-4 py-3 text-xs font-bold rounded-xl transition-all
-                    ${isActive 
-                      ? 'bg-brand-primary text-white shadow-lg shadow-red-100' 
-                      : 'text-brand-secondary/70 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-brand-secondary dark:hover:text-white'}
-                  `}
-                >
-                  <item.icon size={18} />
-                  {item.name}
-                </NavLink>
+                    className={`
+                      flex items-center gap-3 px-4 py-3 text-xs font-bold rounded-xl transition-all
+                      ${isActive 
+                        ? 'bg-brand-primary text-white shadow-lg shadow-red-100' 
+                        : 'text-brand-secondary/70 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-brand-secondary dark:hover:text-white'}
+                    `}
+                  >
+                    <item.icon size={18} />
+                    {item.name}
+                  </NavLink>
               );
             })}
           </nav>
 
           <div className="p-4 border-t dark:border-gray-700 bg-gray-50/30 dark:bg-gray-900/50 space-y-4">
+            {currentRole === 'admin' && (
+              <NavLink
+                to="/employees"
+                onClick={() => setIsMobileMenuOpen(false)}
+                end={false}
+                className={({ isActive }) =>
+                  `flex items-center gap-3 px-4 py-3 text-xs font-bold rounded-xl transition-all
+                  ${isActive
+                    ? 'bg-brand-primary text-white shadow-lg shadow-red-100'
+                    : 'text-brand-secondary/70 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-brand-secondary dark:hover:text-white'}`
+                }
+              >
+                <Users size={18} />
+                Сотрудники
+              </NavLink>
+            )}
             <button 
               onClick={toggleTheme}
               className="w-full flex items-center gap-2.5 px-3 py-2 text-[11px] font-bold rounded-lg transition-all text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"

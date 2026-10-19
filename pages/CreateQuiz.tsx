@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useUi } from '../context/UiContext';
 import { useStore } from '../context/StoreContext';
 import { Question, QuestionType, QuestionDifficulty, Quiz } from '../types';
@@ -33,13 +33,17 @@ export const CreateQuiz: React.FC = () => {
   const [mode, setMode] = useState<'manual' | 'ai'>('ai');
   const [showAddViaAI, setShowAddViaAI] = useState(false);
 
+  // форма заполняется один раз: фоновое обновление данных не должно затирать несохранённые правки
+  const loadedId = useRef<string | null>(null);
+
   useEffect(() => {
-    if (isEditing) {
+    if (isEditing && loadedId.current !== id) {
       // Ищем сначала в банке тестов, затем в сессиях (так как валидация может ссылаться на сессию)
       const quizToEdit = quizzes.find(q => String(q.id) === String(id)) || 
                          sessions.find(s => String(s.id) === String(id));
                          
       if (quizToEdit) {
+        loadedId.current = id!;
         setTitle(quizToEdit.title || '');
         setDescription(quizToEdit.description || '');
         setCategory(quizToEdit.category || 'Аттестация');

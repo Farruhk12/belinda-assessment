@@ -103,6 +103,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const [currentUser, setCurrentUser] = useState<Employee | null>(null);
   const clockOffset = useRef(0);
   const pendingWrites = useRef(0);
+  const writeVersion = useRef(0);
 
   const resetState = () => {
     setQuizzes([]); setSessions([]); setResults([]); setEmployees([]);
@@ -116,8 +117,11 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   const refresh = useCallback(async () => {
     if (!getToken()) return;
+    const versionAtStart = writeVersion.current;
     try {
       const data: any = await api.get('/api/data');
+      // ответ мог быть снят до сохранения: он затёр бы только что добавленные данные
+      if (pendingWrites.current > 0 || writeVersion.current !== versionAtStart) return;
       clockOffset.current = (data.serverNow || Date.now()) - Date.now();
       setQuizzes((data.quizzes || []).map(normalizeQuiz));
       setSessions((data.sessions || []).map(normalizeQuiz));
@@ -160,14 +164,17 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   // изменения применяются сразу; если сервер отказал, пользователь видит ошибку и данные перечитываются
   const persist = async (action: 'save' | 'delete', sheet: string, data: any, id?: string) => {
     pendingWrites.current++;
+    writeVersion.current++;
+    let failed = false;
     try {
       await api.post('/api/data', { action, sheet, data, id });
     } catch (e) {
+      failed = true;
       notify(`Не удалось сохранить изменения: ${e instanceof Error ? e.message : 'ошибка'}`);
-      await refresh();
     } finally {
       pendingWrites.current--;
     }
+    if (failed) await refresh();
   };
 
   const loginUser = async (login: string, pass: string): Promise<boolean> => {

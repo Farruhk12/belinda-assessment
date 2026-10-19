@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
+import { useUi } from '../context/UiContext';
 import { useStore } from '../context/StoreContext';
 import { Question, QuestionType, QuestionDifficulty, Quiz } from '../types';
 import { generateQuizFromPDF, generateQuizFromText, type DifficultyLevel } from '../services/geminiService';
@@ -9,6 +10,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 export const CreateQuiz: React.FC = () => {
   // Destructure updateSession from useStore hook to fix getState error
   const { addQuiz, updateQuiz, updateSession, quizzes, sessions } = useStore();
+  const { notify } = useUi();
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const isEditing = !!id;
@@ -62,13 +64,13 @@ export const CreateQuiz: React.FC = () => {
 
   const handleGenerateAI = async () => {
     if (!group || !product) {
-      alert("Заполните Группу и Продукт.");
+      notify("Заполните Группу и Продукт.");
       return;
     }
     const hasText = aiTextInput.trim().length > 0;
     const hasPdf = !!pdfFile;
     if (!hasText && !hasPdf) {
-      alert("Вставьте текст по теме или загрузите PDF.");
+      notify("Вставьте текст по теме или загрузите PDF.");
       return;
     }
     setIsGenerating(true);
@@ -98,7 +100,7 @@ export const CreateQuiz: React.FC = () => {
         setPdfFile(null);
       }
     } catch (e) {
-      alert("Ошибка генерации ИИ. Проверьте API-ключ и подключение.");
+      notify("Ошибка генерации ИИ. Проверьте API-ключ и подключение.");
     } finally {
       setIsGenerating(false);
     }
@@ -106,7 +108,7 @@ export const CreateQuiz: React.FC = () => {
 
   const handleSaveQuiz = () => {
     if (!title || !group || !product || questions.length === 0) {
-      alert("Заполните поля и добавьте вопросы.");
+      notify("Заполните поля и добавьте вопросы.");
       return;
     }
     const trimmedQuestions: Question[] = questions.map(q => ({

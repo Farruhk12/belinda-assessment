@@ -4,7 +4,7 @@ import { useStore } from '../context/StoreContext';
 import { Database, Lock, User, LogIn, Loader2, AlertCircle, Info, CloudAlert } from 'lucide-react';
 
 export const Login: React.FC = () => {
-  const { loginUser, isLoading, employees, sheetsUrl } = useStore();
+  const { loginUser, isLoading, loadError } = useStore();
   const [login, setLogin] = useState('');
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -18,17 +18,9 @@ export const Login: React.FC = () => {
     setError('');
     
     try {
-      const success = await loginUser(login, password);
-      if (!success) {
-        if (employees.length === 0) {
-          setError('База данных пуста. Для первой настройки используйте логин "admin" и пароль "admin".');
-        } else {
-          setError('Неверный логин или пароль. Проверьте правильность ввода.');
-        }
-        setIsSubmitting(false);
-      }
+      await loginUser(login, password);
     } catch (err) {
-      setError('Ошибка при попытке входа. Проверьте соединение с интернетом.');
+      setError(err instanceof Error ? err.message : 'Ошибка при попытке входа. Проверьте соединение с интернетом.');
       setIsSubmitting(false);
     }
   };
@@ -37,7 +29,7 @@ export const Login: React.FC = () => {
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4 animate-fade-in">
       <div className="max-w-xs w-full space-y-6">
         <div className="text-center space-y-3">
-          <img src="https://belinda.tj/img/main-logo.svg" alt="Belinda" className="h-16 mx-auto mb-2" />
+          <img src="/logo.svg" alt="Belinda" className="h-16 mx-auto mb-2" />
           <h1 className="text-2xl font-black tracking-tight leading-none">
             <span className="text-brand-primary">Belinda</span> <span className="text-brand-secondary">assessment</span>
           </h1>
@@ -50,11 +42,11 @@ export const Login: React.FC = () => {
             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Авторизация сотрудника</p>
           </div>
 
-          {!sheetsUrl && (
+          {loadError && (
             <div className="bg-amber-50 p-4 rounded-xl border border-amber-100 flex items-start gap-3">
               <CloudAlert className="text-amber-600 shrink-0" size={16} />
               <p className="text-[9px] font-bold text-amber-800 leading-tight uppercase">
-                Внимание: URL базы данных не настроен. Обратитесь к администратору.
+                {loadError}
               </p>
             </div>
           )}
@@ -118,12 +110,6 @@ export const Login: React.FC = () => {
             </button>
           </form>
           
-          {employees.length === 0 && !isLoading && (
-            <div className="flex items-center gap-2 justify-center text-[8px] font-black text-gray-400 uppercase tracking-widest border-t pt-4">
-              <Info size={12} />
-              Первый вход? Используйте admin / admin
-            </div>
-          )}
         </div>
       </div>
     </div>

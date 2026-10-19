@@ -1,5 +1,8 @@
 
 import React, { useState, useMemo } from 'react';
+import { groupsLabel } from '../api/_lib/groups';
+import { useUi } from '../context/UiContext';
+import { MAX_VIOLATIONS } from '../types';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useStore } from '../context/StoreContext';
 import { QuestionType } from '../types';
@@ -12,6 +15,7 @@ export const EmployeeDetailResults: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { results, employees, positions, sessions, quizzes, currentUser } = useStore();
+  const { notify } = useUi();
 
   if (currentUser?.role === 'employee' && id !== currentUser.id) {
     navigate('/active', { replace: true });
@@ -40,7 +44,7 @@ export const EmployeeDetailResults: React.FC = () => {
   }
 
   const chartData = [...employeeResults]
-    .filter(r => (r.violations || 0) <= 3)
+    .filter(r => (r.violations || 0) <= MAX_VIOLATIONS)
     .reverse()
     .map(r => ({
       date: new Date(r.date).toLocaleDateString(),
@@ -48,7 +52,7 @@ export const EmployeeDetailResults: React.FC = () => {
       title: r.quizTitle
     }));
 
-  const validResults = employeeResults.filter(r => r.status === 'completed' && (r.violations || 0) <= 3);
+  const validResults = employeeResults.filter(r => r.status === 'completed' && (r.violations || 0) <= MAX_VIOLATIONS);
   const avgScore = validResults.length > 0 
     ? Math.round(validResults.reduce((acc, curr) => acc + curr.percentage, 0) / validResults.length) 
     : 0;
@@ -97,11 +101,11 @@ export const EmployeeDetailResults: React.FC = () => {
   };
 
   const handleCopyToClipboard = async () => {
-    const successfulCount = employeeResults.filter(r => r.status === 'completed' && r.percentage >= getPassThreshold(r.quizId) && (r.violations || 0) <= 3).length;
+    const successfulCount = employeeResults.filter(r => r.status === 'completed' && r.percentage >= getPassThreshold(r.quizId) && (r.violations || 0) <= MAX_VIOLATIONS).length;
     let text = `Результаты аттестаций — ${employee.fullName}\n`;
     text += `${'='.repeat(50)}\n\n`;
     text += `Должность: ${positionName}\n`;
-    text += `Группа: ${employee.group}\n`;
+    text += `Группа: ${groupsLabel(employee)}\n`;
     text += `Область: ${employee.area}\n\n`;
     text += `Средний балл: ${avgScore}%\n`;
     text += `Тестов пройдено: ${employeeResults.length}\n`;
@@ -109,7 +113,7 @@ export const EmployeeDetailResults: React.FC = () => {
     text += `Результаты по тестам:\n`;
     text += `${'-'.repeat(50)}\n`;
     employeeResults.forEach(res => {
-      const isDisqualified = (res.violations || 0) > 3;
+      const isDisqualified = (res.violations || 0) > MAX_VIOLATIONS;
       const status = isDisqualified ? 'Аннулирован' : res.status === 'pending' ? 'Проверка' : (res.percentage >= getPassThreshold(res.quizId) ? 'Сдано' : 'Не сдан');
       text += `${res.quizTitle} | ${new Date(res.date).toLocaleDateString()} | ${res.percentage}% | ${status}\n`;
     });
@@ -128,7 +132,7 @@ export const EmployeeDetailResults: React.FC = () => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      alert('Не удалось скопировать. Проверьте разрешения браузера.');
+      notify('Не удалось скопировать. Проверьте разрешения браузера.');
     }
   };
 
@@ -174,9 +178,7 @@ export const EmployeeDetailResults: React.FC = () => {
                   {positionName}
                </div>
                <div className="flex items-center gap-2.5 text-[10px] font-black text-brand-secondary uppercase">
-                  <User size={14} className="text-brand-primary/40" />
-                  {employee.group}
-               </div>
+                  <User size={14} className="text-brand-primary/40" />$1{groupsLabel(employee)}$2               </div>
                <div className="flex items-center gap-2.5 text-[10px] font-black text-brand-secondary uppercase">
                   <MapPin size={14} className="text-brand-primary/40" />
                   {employee.area}
@@ -197,7 +199,7 @@ export const EmployeeDetailResults: React.FC = () => {
                 <div className="text-center">
                    <p className="text-[8px] font-black text-gray-500 uppercase tracking-widest">Успешно</p>
                    <p className="text-lg font-black text-green-400">
-                      {employeeResults.filter(r => r.status === 'completed' && r.percentage >= getPassThreshold(r.quizId) && (r.violations || 0) <= 3).length}
+                      {employeeResults.filter(r => r.status === 'completed' && r.percentage >= getPassThreshold(r.quizId) && (r.violations || 0) <= MAX_VIOLATIONS).length}
                    </p>
                 </div>
              </div>
@@ -247,7 +249,7 @@ export const EmployeeDetailResults: React.FC = () => {
                   </thead>
                   <tbody className="divide-y divide-gray-50 font-bold">
                     {employeeResults.map(res => {
-                      const isDisqualified = (res.violations || 0) > 3;
+                      const isDisqualified = (res.violations || 0) > MAX_VIOLATIONS;
                       return (
                         <tr key={res.id} className="hover:bg-gray-50 transition-colors">
                           <td className="px-6 py-4">

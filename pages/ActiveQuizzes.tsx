@@ -1,31 +1,22 @@
 
 import React from 'react';
+import { assignmentApplies } from '../api/_lib/targeting';
 import { useStore } from '../context/StoreContext';
 import { Link } from 'react-router-dom';
 import { Play, BrainCircuit, Clock, Calendar } from 'lucide-react';
 
 export const ActiveQuizzes: React.FC = () => {
-  const { assignments, sessions, results, currentUser } = useStore();
+  const { assignments, sessions, results, currentUser, now: serverNow } = useStore();
   if (!currentUser) return null;
-  const now = Date.now();
+  const now = serverNow();
 
   const myAssignments = assignments.filter(asgn => {
-    const isCompleted = results.some(r => r.quizId === asgn.quizId && r.userId === currentUser.id);
+    const isCompleted = results.some(r => String(r.quizId) === String(asgn.quizId) && String(r.userId) === String(currentUser.id));
     if (isCompleted && !asgn.isRetake) return false;
-    const quiz = sessions.find(q => q.id === asgn.quizId);
+    const quiz = sessions.find(q => String(q.id) === String(asgn.quizId));
     if (!quiz || (quiz.availableUntil && now > quiz.availableUntil) || (quiz.availableFrom && now < quiz.availableFrom)) return false;
     
-    const userArea = (currentUser.area || "").toLowerCase().trim();
-    const userGroup = (currentUser.group || "").toLowerCase().trim();
-    const targetArea = (asgn.targetArea || "").toLowerCase().trim();
-    const targetGroup = (asgn.targetGroup || "").toLowerCase().trim();
-    
-    if (asgn.targetType === 'ALL') return true;
-    if (asgn.targetType === 'INDIVIDUAL' && asgn.targetEmployeeId === currentUser.id) return true;
-    if (asgn.targetType === 'AREA' && targetArea === userArea && userArea !== "") return true;
-    if (asgn.targetType === 'GROUP' && targetGroup === userGroup && userGroup !== "") return true;
-    if (asgn.targetType === 'AREA_GROUP' && targetArea === userArea && targetGroup === userGroup) return true;
-    return false;
+    return assignmentApplies(asgn, currentUser);
   });
 
   return (
@@ -49,7 +40,7 @@ export const ActiveQuizzes: React.FC = () => {
           </div>
         ) : (
           myAssignments.map((asgn) => {
-            const quiz = sessions.find(q => q.id === asgn.quizId);
+            const quiz = sessions.find(q => String(q.id) === String(asgn.quizId));
             if (!quiz) return null;
             return (
               <div key={asgn.id} className="bg-white group rounded-2xl border border-gray-100 p-4 hover:shadow-md transition-all flex flex-col cursor-pointer relative overflow-hidden h-[160px]">
@@ -63,7 +54,7 @@ export const ActiveQuizzes: React.FC = () => {
                 </div>
 
                 <div className="flex items-center gap-3 text-[9px] font-bold text-gray-400 uppercase mb-4">
-                  <span className="flex items-center gap-1"><Clock size={10} className="text-brand-primary/50" /> {quiz.timeLimit}м</span>
+                  {quiz.timeLimit ? <span className="flex items-center gap-1"><Clock size={10} className="text-brand-primary/50" /> {quiz.timeLimit}м</span> : null}
                   <span className="flex items-center gap-1"><Calendar size={10} className="text-brand-primary/50" /> {new Date(quiz.availableFrom || quiz.createdAt).toLocaleDateString()}</span>
                 </div>
                 

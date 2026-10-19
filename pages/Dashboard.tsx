@@ -1,12 +1,29 @@
 
 import React, { useState, useMemo } from 'react';
+import { useUi } from '../context/UiContext';
 import { useStore } from '../context/StoreContext';
 import { Trash2, ArrowRight, Briefcase, Pencil, Folder, Search, X, CheckCircle2, List, Layers, Package, FileQuestion, Copy } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Quiz, QuestionType } from '../types';
 
+// Каждой группе стабильно подбирается свой цвет (по названию), чтобы банк тестов не выглядел серым
+const GROUP_ACCENTS = [
+  { bar: 'bg-brand-primary', chip: 'bg-red-100 text-brand-primary', hover: 'hover:border-brand-primary/50', test: 'bg-red-50 text-brand-primary', open: 'bg-sky-50 text-sky-700' },
+  { bar: 'bg-sky-500', chip: 'bg-sky-100 text-sky-700', hover: 'hover:border-sky-400', test: 'bg-sky-50 text-sky-700', open: 'bg-violet-50 text-violet-700' },
+  { bar: 'bg-emerald-500', chip: 'bg-emerald-100 text-emerald-700', hover: 'hover:border-emerald-400', test: 'bg-emerald-50 text-emerald-700', open: 'bg-amber-50 text-amber-700' },
+  { bar: 'bg-amber-500', chip: 'bg-amber-100 text-amber-700', hover: 'hover:border-amber-400', test: 'bg-amber-50 text-amber-700', open: 'bg-sky-50 text-sky-700' },
+  { bar: 'bg-violet-500', chip: 'bg-violet-100 text-violet-700', hover: 'hover:border-violet-400', test: 'bg-violet-50 text-violet-700', open: 'bg-emerald-50 text-emerald-700' },
+  { bar: 'bg-teal-500', chip: 'bg-teal-100 text-teal-700', hover: 'hover:border-teal-400', test: 'bg-teal-50 text-teal-700', open: 'bg-amber-50 text-amber-700' }
+];
+const accentFor = (name: string) => {
+  let h = 0;
+  for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return GROUP_ACCENTS[h % GROUP_ACCENTS.length];
+};
+
 export const Dashboard: React.FC = () => {
   const { quizzes, deleteQuiz, addQuiz } = useStore();
+  const { notify, confirm } = useUi();
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
@@ -172,10 +189,11 @@ export const Dashboard: React.FC = () => {
           {bankEntries.map(([groupName, groupQuizzes]) => (
             <div key={groupName} className="space-y-2">
               <div className="flex items-center gap-2 ml-1">
-                <div className="w-4 h-4 bg-red-50 rounded flex items-center justify-center text-brand-primary">
-                  <Briefcase size={9} />
+                <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${accentFor(groupName).chip}`}>
+                  <Briefcase size={14} />
                 </div>
-                <h3 className="text-[9px] font-black text-brand-secondary uppercase tracking-[0.2em]">{groupName}</h3>
+                <h3 className="text-xs font-black text-brand-secondary uppercase tracking-[0.15em]">{groupName}</h3>
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${accentFor(groupName).chip}`}>{groupQuizzes.length}</span>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
@@ -188,10 +206,11 @@ export const Dashboard: React.FC = () => {
                     <div 
                       key={quiz.id} 
                       onClick={() => setPreviewQuiz(quiz)}
-                      className="bg-white group rounded-xl border border-gray-100 p-3 hover:shadow-md transition-all duration-200 flex flex-col cursor-pointer relative overflow-hidden"
+                      className={`bg-white group rounded-xl border border-gray-200 p-3 pl-4 shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 flex flex-col cursor-pointer relative overflow-hidden ${accentFor(groupName).hover}`}
                     >
+                      <span className={`absolute left-0 top-0 h-full w-1.5 ${accentFor(groupName).bar}`} />
                       <div className="flex justify-between items-start">
-                        <h5 className="text-[12px] font-black text-brand-secondary leading-tight group-hover:text-brand-primary transition-colors line-clamp-1 flex-1 pr-2">
+                        <h5 className="text-[13px] font-black text-brand-secondary leading-tight group-hover:text-brand-primary transition-colors line-clamp-1 flex-1 pr-2">
                           {quiz.title}
                         </h5>
                         <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
@@ -205,7 +224,7 @@ export const Dashboard: React.FC = () => {
                             <Pencil size={11} />
                           </button>
                           <button 
-                            onClick={(e) => { e.stopPropagation(); if(confirm('Удалить?')) deleteQuiz(quiz.id); }} 
+                            onClick={async (e) => { e.stopPropagation(); if (await confirm('Удалить тест?')) deleteQuiz(quiz.id); }} 
                             className="p-1 text-gray-300 hover:text-brand-primary transition-colors"
                           >
                             <Trash2 size={11} />
@@ -213,7 +232,7 @@ export const Dashboard: React.FC = () => {
                         </div>
                       </div>
 
-                      <p className="text-[8px] font-bold text-gray-300 uppercase tracking-tight truncate mb-1">
+                      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-tight truncate mb-1.5">
                         {quiz.product}
                       </p>
                       {(quiz.tags || []).length > 0 && (
@@ -223,11 +242,11 @@ export const Dashboard: React.FC = () => {
                           ))}
                         </div>
                       )}
-                      <div className="flex items-center justify-between text-[8px] font-black uppercase tracking-widest pt-2 border-t border-gray-50">
-                        <span className="text-brand-primary">
+                      <div className="flex items-center justify-between gap-2 text-[9px] font-black uppercase tracking-wide pt-2 border-t border-gray-100">
+                        <span className={`px-2 py-0.5 rounded-md ${accentFor(groupName).test}`}>
                           {testCount} {testCount === 1 ? 'ТЕСТ' : (testCount > 1 && testCount < 5 ? 'ТЕСТА' : 'ТЕСТОВ')}
                         </span>
-                        <span className="text-gray-200">
+                        <span className={`px-2 py-0.5 rounded-md ${accentFor(groupName).open}`}>
                           {openCount} {openCount === 1 ? 'ОТКРЫТЫЙ' : (openCount > 1 && openCount < 5 ? 'ОТКРЫТЫХ' : 'ОТКРЫТЫХ')}
                         </span>
                       </div>

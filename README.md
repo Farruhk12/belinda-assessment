@@ -1,20 +1,40 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# Belinda Assessment
 
-# Run and deploy your AI Studio app
+Система аттестации сотрудников: тесты и сессии, назначения, прохождение с контролем нарушений, ручная проверка открытых вопросов, аналитика и ИИ-отчёты (Gemini).
 
-This contains everything you need to run your app locally.
+**Стек:** React + Vite + Tailwind, серверные функции в `api/` (Vercel), база Neon Postgres.
 
-View your app in AI Studio: https://ai.studio/apps/drive/1N1iDjMeb3zEEC9urA4Gp0IiqNfk6m4NP
+## Запуск локально
 
-## Run Locally
+1. `npm install`
+2. Создайте `.env.local` (он в `.gitignore`):
 
-**Prerequisites:**  Node.js
+   ```
+   DATABASE_URL=postgresql://user:password@host/dbname?sslmode=require
+   AUTH_SECRET=<случайная строка от 32 символов>
+   GEMINI_API_KEY=<ключ Gemini>
+   # только для пустой базы: пароль первого администратора (логин admin)
+   ADMIN_BOOTSTRAP_PASSWORD=
+   ```
 
+   `AUTH_SECRET` можно сгенерировать так: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
+3. `npm run dev` — приложение и `/api/*` на http://localhost:3000 (порт может смениться, если занят).
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+Таблицы в Neon создаются автоматически при первом запросе.
+
+## Деплой (Vercel)
+
+Добавьте в Environment Variables те же `DATABASE_URL`, `AUTH_SECRET`, `GEMINI_API_KEY`. Фронтенд собирается `npm run build`, функции из `api/` разворачиваются автоматически.
+
+## Проверки
+
+- `npm run typecheck` — проверка типов
+- `npm test` — тесты серверной логики (подсчёт баллов, авторизация, права доступа)
+
+## Как это устроено
+
+- **Авторизация.** `POST /api/auth` проверяет логин и пароль (хеш scrypt) и выдаёт подписанный токен на 7 дней. Роль всегда берётся из базы, а не из токена или браузера.
+- **Данные.** `GET /api/data` отдаёт каждому только его часть: сотрудник — свои результаты и назначения, менеджер — свою команду, админ — всё. Правильные ответы и пароли клиенту не передаются (кроме админа, ему нужны правильные ответы для редактирования тестов). Запись (`POST /api/data`) доступна только администратору.
+- **Прохождение теста.** `POST /api/attempt`: попытка хранится на сервере, ответы проверяются и баллы считаются там же. Сервер проверяет назначение, окно доступности и повторные попытки. Таймер считается от старта попытки на сервере, обновление страницы попытку не сбрасывает.
+- **ИИ.** Вызовы Gemini идут через `POST /api/ai`, ключ в браузер не попадает. Лимит тела запроса на Vercel — около 4,5 МБ, поэтому PDF для генерации вопросов должен быть меньше ~3 МБ.
+- **Хранение.** Каждая сущность — JSON-документ в таблице Neon (`id`, `data`).

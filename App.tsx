@@ -2,6 +2,7 @@
 import React from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { StoreProvider, useStore } from './context/StoreContext';
+import { UiProvider } from './context/UiContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { Layout } from './components/Layout';
 import { Dashboard } from './pages/Dashboard';
@@ -88,11 +89,13 @@ const AppRoutes: React.FC = () => {
 const App: React.FC = () => {
   return (
     <ThemeProvider>
-      <StoreProvider>
-        <HashRouter>
-          <AppRoutes />
-        </HashRouter>
-      </StoreProvider>
+      <UiProvider>
+        <StoreProvider>
+          <HashRouter>
+            <AppRoutes />
+          </HashRouter>
+        </StoreProvider>
+      </UiProvider>
     </ThemeProvider>
   );
 };

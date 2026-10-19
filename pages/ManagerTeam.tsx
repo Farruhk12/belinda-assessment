@@ -1,5 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
+import { groupsLabel } from '../api/_lib/groups';
+import { teamOf } from '../api/_lib/targeting';
 import { useStore } from '../context/StoreContext';
 import { Search, Briefcase, MapPin, ChevronRight, BarChart3, UsersRound, TrendingUp, Target, CheckCircle2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -9,38 +11,12 @@ export const ManagerTeam: React.FC = () => {
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
 
-  if (!currentUser || currentUser.role !== 'manager') return null;
-
   const teamMembers = useMemo(() => {
-    const managedAreasNorm = (currentUser.managedAreas || (currentUser.managedArea ? [currentUser.managedArea] : [])).map(a => a.toLowerCase().trim());
-    const mgrGroupNorm = (currentUser.group || "").toLowerCase().trim();
-    const managedGroupsNorm = (currentUser.managedGroups || []).map(g => g.toLowerCase().trim());
-    const hasDefinedGroups = managedGroupsNorm.length > 0;
-    const hasDefinedAreas = managedAreasNorm.length > 0;
-
-    return employees.filter(emp => {
-      if (String(emp.id) === String(currentUser.id)) return false;
-      
-      const empAreaNorm = (emp.area || "").toLowerCase().trim();
-      const empGroupNorm = (emp.group || "").toLowerCase().trim();
-
-      const matchesArea = !hasDefinedAreas || managedAreasNorm.includes(empAreaNorm);
-      
-      // 3. Фильтр по Группе (регистронезависимый)
-      let matchesGroup = false;
-      if (hasDefinedGroups) {
-        matchesGroup = managedGroupsNorm.includes(empGroupNorm);
-      } else {
-        matchesGroup = empGroupNorm === mgrGroupNorm;
-      }
-      
-      // 4. Поиск по тексту (уже был регистронезависимый)
-      const searchLower = searchTerm.toLowerCase();
-      const matchesSearch = emp.fullName.toLowerCase().includes(searchLower) || 
-                            empGroupNorm.includes(searchLower);
-                            
-      return matchesArea && matchesGroup && matchesSearch;
-    });
+    if (!currentUser) return [];
+    const searchLower = searchTerm.toLowerCase();
+    return teamOf(currentUser, employees).filter(emp =>
+      emp.fullName.toLowerCase().includes(searchLower) || groupsLabel(emp).toLowerCase().includes(searchLower)
+    );
   }, [employees, currentUser, searchTerm]);
 
   const teamStats = useMemo(() => {
@@ -55,6 +31,8 @@ export const ManagerTeam: React.FC = () => {
       
     return { totalMembers, avgScore, completedCount: completedResults.length };
   }, [teamMembers, results]);
+
+  if (!currentUser || currentUser.role !== 'manager') return null;
 
   return (
     <div className="space-y-6 animate-fade-in pb-12">
@@ -149,7 +127,7 @@ export const ManagerTeam: React.FC = () => {
                           <Briefcase size={12} className="text-brand-primary/40" />
                           {position}
                         </span>
-                        <span className="text-[9px] text-gray-400 font-bold mt-0.5 uppercase">{emp.group}</span>
+                        <span className="text-[9px] text-gray-400 font-bold mt-0.5 uppercase">{groupsLabel(emp)}</span>
                       </div>
                     </td>
                     <td className="px-6 py-4">

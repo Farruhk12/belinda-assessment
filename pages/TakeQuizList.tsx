@@ -1,5 +1,8 @@
 
 import React, { useState, useMemo } from 'react';
+import { GroupPicker } from '../components/GroupPicker';
+import { employeeGroups, groupsLabel } from '../api/_lib/groups';
+import { useUi } from '../context/UiContext';
 import { useStore } from '../context/StoreContext';
 import { useNavigate, Link } from 'react-router-dom';
 import { ChevronRight, ChevronDown, ChevronUp, List, Plus, X, Globe, Timer, Calendar, Pencil, ExternalLink, CheckCircle2, BarChart3, Search, Activity, User, Filter, LayoutGrid, Users, FileQuestion, MessageSquare, RotateCcw, Copy, Trash2 } from 'lucide-react';
@@ -12,6 +15,7 @@ interface TemplateConfig {
 
 export const TakeQuizList: React.FC = () => {
   const { quizzes, sessions, addSession, updateSession, deleteSession, employees, assignments, addAssignment, deleteAssignment, results } = useStore();
+  const { notify } = useUi();
   const navigate = useNavigate();
   
   const [isBuilderMode, setIsBuilderMode] = useState(false);
@@ -29,7 +33,7 @@ export const TakeQuizList: React.FC = () => {
 
   const [targetType, setTargetType] = useState<AssignmentTargetType>('ALL');
   const [targetArea, setTargetArea] = useState('');
-  const [targetGroup, setTargetGroup] = useState('');
+  const [targetGroups, setTargetGroups] = useState<string[]>([]);
   const [targetEmployeeId, setTargetEmployeeId] = useState('');
   const [expandedQuizId, setExpandedQuizId] = useState<string | null>(null);
   const [viewQuestionsSession, setViewQuestionsSession] = useState<Quiz | null>(null);
@@ -38,13 +42,13 @@ export const TakeQuizList: React.FC = () => {
   const [sessionToDelete, setSessionToDelete] = useState<Quiz | null>(null);
 
   const allAreas = useMemo(() => Array.from(new Set(employees.map(e => String(e.area || '').trim()))).filter(Boolean).sort(), [employees]);
-  const allGroups = useMemo(() => Array.from(new Set(employees.map(e => String(e.group || '').trim()))).filter(Boolean).sort(), [employees]);
+  const allGroups = useMemo(() => Array.from(new Set(employees.flatMap(e => employeeGroups(e)))).sort(), [employees]);
   
   const filteredSessions = useMemo(() => {
     return (sessions || []).filter(s => {
       const title = String(s.title || '').toLowerCase();
       const matchesSearch = title.includes(listSearch.toLowerCase());
-      const matchesGroup = groupFilter === 'ALL' || String(s.group || '').trim() === groupFilter;
+      const matchesGroup = groupFilter === 'ALL' || String(s.group || '').split(',').some(g => g.trim() === groupFilter);
       return matchesSearch && matchesGroup;
     }).sort((a,b) => (Number(b.createdAt) || 0) - (Number(a.createdAt) || 0));
   }, [sessions, listSearch, groupFilter]);
@@ -71,7 +75,7 @@ export const TakeQuizList: React.FC = () => {
     setAvailableUntil('');
     setTargetType('ALL');
     setTargetArea('');
-    setTargetGroup('');
+    setTargetGroups([]);
     setTargetEmployeeId('');
   };
 
@@ -148,7 +152,7 @@ export const TakeQuizList: React.FC = () => {
 
   const handleRetakeAssign = () => {
     if (!retakeSession || retakeSelectedIds.size === 0) {
-      alert('Выберите хотя бы одного сотрудника');
+      notify('Выберите хотя бы одного сотрудника');
       return;
     }
     retakeSelectedIds.forEach(empId => {
@@ -175,7 +179,8 @@ export const TakeQuizList: React.FC = () => {
   };
 
   const startEditing = (session: Quiz) => {
-    const asgn = assignments.find(a => String(a.quizId) === String(session.id));
+    const sessionAsgns = assignments.filter(a => String(a.quizId) === String(session.id) && !a.isRetake);
+    const asgn = sessionAsgns[0] ?? assignments.find(a => String(a.quizId) === String(session.id));
     setEditingSessionId(session.id);
     setSessionTitle(session.title);
     setTimeLimit(session.timeLimit || 30);
@@ -185,7 +190,7 @@ export const TakeQuizList: React.FC = () => {
     if (asgn) {
       setTargetType(asgn.targetType);
       setTargetArea(asgn.targetArea || '');
-      setTargetGroup(asgn.targetGroup || '');
+      setTargetGroups(Array.from(new Set(sessionAsgns.map(a => String(a.targetGroup || '').trim()).filter(Boolean))));
       setTargetEmployeeId(asgn.targetEmployeeId || '');
     }
     // Восстанавливаем выбранные вопросы из session.questions — ищем, из каких шаблонов они пришли
@@ -216,13 +221,15 @@ export const TakeQuizList: React.FC = () => {
   };
 
   const handleLaunchOrUpdate = () => {
-    if (!String(sessionTitle).trim()) { alert("Введите название аттестации"); return; }
+    if (!String(sessionTitle).trim()) { notify("Введите название аттестации"); return; }
+    const usesGroups = targetType === 'GROUP' || targetType === 'AREA_GROUP';
+    if (usesGroups && targetGroups.length === 0) { notify("Выберите хотя бы одну группу"); return; }
     
     let sessionQuestions: any[] = [];
     if (!editingSessionId) {
       // Fix: casting Object.entries to properly typed array to avoid 'unknown' type errors for config
       const templateEntries = Object.entries(selectedTemplates) as [string, TemplateConfig][];
-      if (templateEntries.length === 0) { alert("Выберите хотя бы один шаблон"); return; }
+      if (templateEntries.length === 0) { notify("Выберите хотя бы один шаблон"); return; }
       
       templateEntries.forEach(([id, config]) => {
         const template = quizzes.find(q => String(q.id) === String(id));
@@ -233,7 +240,7 @@ export const TakeQuizList: React.FC = () => {
         }
       });
       if (sessionQuestions.length === 0) {
-        alert('Выберите хотя бы один тест или открытый вопрос в выбранных шаблонах');
+        notify('Выберите хотя бы один тест или открытый вопрос в выбранных шаблонах');
         return;
       }
     } else {
@@ -255,7 +262,7 @@ export const TakeQuizList: React.FC = () => {
         if (!allTemplateQuestionIds.has(q.id)) sessionQuestions.push(q);
       });
       if (sessionQuestions.length === 0) {
-        alert('Выберите хотя бы один тест или открытый вопрос в выбранных шаблонах');
+        notify('Выберите хотя бы один тест или открытый вопрос в выбранных шаблонах');
         return;
       }
     }
@@ -265,7 +272,7 @@ export const TakeQuizList: React.FC = () => {
       title: sessionTitle, 
       description: `Комплексная аттестация`, 
       category: 'Аттестация', 
-      group: targetGroup || 'Все отделы', 
+      group: usesGroups ? targetGroups.join(', ') : 'Все отделы', 
       product: 'Сборный тест',
       createdAt: editingSessionId ? (sessions.find(s => String(s.id) === String(editingSessionId))?.createdAt || Date.now()) : Date.now(),
       questions: sessionQuestions, 
@@ -280,14 +287,19 @@ export const TakeQuizList: React.FC = () => {
     if (editingSessionId) updateSession(editingSessionId, quizData);
     else addSession(quizData);
 
-    const oldAsgn = assignments.find(a => String(a.quizId) === String(quizData.id));
-    if (oldAsgn) deleteAssignment(oldAsgn.id);
+    // старые назначения сессии (кроме пересдач) заменяются новыми: по одному на каждую группу
+    assignments
+      .filter(a => String(a.quizId) === String(quizData.id) && !a.isRetake)
+      .forEach(a => deleteAssignment(a.id));
 
-    addAssignment({ 
-      id: `asgn-${Date.now()}`, 
-      quizId: quizData.id, 
-      targetType, targetArea, targetGroup, targetEmployeeId, 
-      assignedAt: Date.now() 
+    const groupTargets: string[] = usesGroups ? targetGroups : [''];
+    groupTargets.forEach((targetGroup, i) => {
+      addAssignment({
+        id: `asgn-${Date.now()}-${i}`,
+        quizId: quizData.id,
+        targetType, targetArea, targetGroup, targetEmployeeId,
+        assignedAt: Date.now()
+      });
     });
     
     resetForm();
@@ -307,18 +319,19 @@ export const TakeQuizList: React.FC = () => {
       }))
     };
     addSession(duplicated);
-    const oldAsgn = assignments.find(a => String(a.quizId) === String(session.id));
-    if (oldAsgn) {
-      addAssignment({
-        id: `asgn-${Date.now()}`,
-        quizId: newId,
-        targetType: oldAsgn.targetType,
-        targetArea: oldAsgn.targetArea,
-        targetGroup: oldAsgn.targetGroup,
-        targetEmployeeId: oldAsgn.targetEmployeeId,
-        assignedAt: Date.now()
+    assignments
+      .filter(a => String(a.quizId) === String(session.id) && !a.isRetake)
+      .forEach((oldAsgn, i) => {
+        addAssignment({
+          id: `asgn-${Date.now()}-${i}`,
+          quizId: newId,
+          targetType: oldAsgn.targetType,
+          targetArea: oldAsgn.targetArea,
+          targetGroup: oldAsgn.targetGroup,
+          targetEmployeeId: oldAsgn.targetEmployeeId,
+          assignedAt: Date.now()
+        });
       });
-    }
   };
 
   const handleDeleteSession = (e: React.MouseEvent, session: Quiz) => {
@@ -504,11 +517,8 @@ export const TakeQuizList: React.FC = () => {
                   )}
                   {(targetType === 'GROUP' || targetType === 'AREA_GROUP') && (
                     <div className="space-y-1">
-                       <label className="text-[8px] font-black text-gray-400 uppercase tracking-widest ml-1">Выбор группы/отдела</label>
-                       <select value={targetGroup} onChange={(e)=>setTargetGroup(e.target.value)} className="w-full bg-gray-50 p-3 rounded-xl font-bold text-xs outline-none focus:ring-1 focus:ring-brand-primary/20 appearance-none border-none">
-                          <option value="">Выберите отдел...</option>
-                          {allGroups.map(g => <option key={g} value={g}>{g}</option>)}
-                       </select>
+                       <label className="text-[8px] font-black text-gray-400 uppercase tracking-widest ml-1">Группы / отделы (можно несколько)</label>
+                       <GroupPicker value={targetGroups} options={allGroups} onChange={setTargetGroups} placeholder="Найти группу..." />
                     </div>
                   )}
                   {targetType === 'INDIVIDUAL' && (
@@ -518,7 +528,7 @@ export const TakeQuizList: React.FC = () => {
                           <User className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300" size={14} />
                           <select value={targetEmployeeId} onChange={(e)=>setTargetEmployeeId(e.target.value)} className="w-full bg-gray-50 pl-11 pr-4 py-3 rounded-xl font-bold text-xs outline-none focus:ring-1 focus:ring-brand-primary/20 appearance-none border-none">
                             <option value="">Выберите из списка...</option>
-                            {employees.map(e => <option key={e.id} value={e.id}>{e.fullName} ({e.group})</option>)}
+                            {employees.map(e => <option key={e.id} value={e.id}>{e.fullName} ({groupsLabel(e)})</option>)}
                           </select>
                        </div>
                     </div>
@@ -701,7 +711,7 @@ export const TakeQuizList: React.FC = () => {
                       <input type="checkbox" checked={retakeSelectedIds.has(String(emp.id))} onChange={() => toggleRetakeEmployee(String(emp.id))} className="rounded border-gray-300 text-brand-primary focus:ring-brand-primary" />
                       <div>
                         <p className="text-[12px] font-black text-brand-secondary">{emp.fullName}</p>
-                        <p className="text-[9px] font-bold text-gray-400 uppercase">{emp.group}</p>
+                        <p className="text-[9px] font-bold text-gray-400 uppercase">{groupsLabel(emp)}</p>
                       </div>
                     </label>
                   ))}

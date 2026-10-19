@@ -1,5 +1,8 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
+import { GroupPicker } from '../components/GroupPicker';
+import { employeeGroups } from '../api/_lib/groups';
+import { useUi } from '../context/UiContext';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useStore } from '../context/StoreContext';
 import { ArrowLeft, Save, Plus, X, Briefcase, MapPin, Key, User, Settings, Trash2, ShieldCheck, Users, UsersRound, CheckCircle2 } from 'lucide-react';
@@ -9,12 +12,13 @@ export const EmployeeForm: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { employees, positions, addEmployee, updateEmployee, addPosition, deletePosition } = useStore();
+  const { notify } = useUi();
   const isEditing = !!id;
 
   const [fullName, setFullName] = useState('');
   const [login, setLogin] = useState('');
   const [password, setPassword] = useState('');
-  const [group, setGroup] = useState('');
+  const [groups, setGroups] = useState<string[]>([]);
   const [area, setArea] = useState('');
   const [positionId, setPositionId] = useState('');
   const [role, setRole] = useState<'admin' | 'employee' | 'manager'>('employee');
@@ -27,7 +31,7 @@ export const EmployeeForm: React.FC = () => {
   const [newPosName, setNewPosName] = useState('');
 
   const allGroups = useMemo(() => {
-    return Array.from(new Set(employees.map(e => e.group.trim()))).filter(Boolean).sort();
+    return Array.from(new Set(employees.flatMap(e => employeeGroups(e)))).sort();
   }, [employees]);
 
   const allAreas = useMemo(() => {
@@ -40,8 +44,7 @@ export const EmployeeForm: React.FC = () => {
       if (emp) {
         setFullName(emp.fullName);
         setLogin(emp.login);
-        setPassword(emp.password || '');
-        setGroup(emp.group);
+        setGroups(employeeGroups(emp));
         setArea(emp.area);
         setPositionId(emp.positionId);
         setRole(emp.role || 'employee');
@@ -52,14 +55,14 @@ export const EmployeeForm: React.FC = () => {
   }, [id, isEditing, employees]);
 
   const handleSave = () => {
-    if (!fullName || !login || !positionId) {
-      alert('Пожалуйста, заполните ФИО, логин и выберите должность');
+    if (!fullName || !login || !positionId || (!isEditing && !password.trim())) {
+      notify('Пожалуйста, заполните ФИО, логин, пароль и выберите должность');
       return;
     }
 
     const employeeData: Employee = {
       id: isEditing ? id : `emp-${Date.now()}`,
-      fullName, login, password, group, area, positionId, role,
+      fullName, login, password, group: groups.join(', '), groups, area, positionId, role,
       managedAreas: role === 'manager' ? managedAreas : undefined,
       managedGroups: role === 'manager' ? managedGroups : undefined,
       createdAt: isEditing ? (employees.find(e => e.id === id)?.createdAt || Date.now()) : Date.now()
@@ -194,11 +197,8 @@ export const EmployeeForm: React.FC = () => {
                 </div>
               </div>
               <div>
-                <label className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-1 block">Отдел / Группа</label>
-                <div className="relative">
-                  <Briefcase className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300" size={14} />
-                  <input type="text" value={group} onChange={(e) => setGroup(e.target.value)} className="w-full bg-gray-50 border-none rounded-xl pl-10 pr-4 py-3 focus:ring-1 focus:ring-brand-primary outline-none font-bold text-xs" placeholder="Продажи" />
-                </div>
+                <label className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-1 block">Отделы / Группы (можно несколько)</label>
+                <GroupPicker value={groups} options={allGroups} onChange={setGroups} allowCustom placeholder="Продажи" />
               </div>
             </div>
           </div>
@@ -216,7 +216,7 @@ export const EmployeeForm: React.FC = () => {
               </div>
               <div>
                 <label className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-1 block">Пароль</label>
-                <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full bg-gray-50 border-none rounded-xl px-4 py-3 focus:ring-1 focus:ring-brand-primary outline-none font-bold text-xs" placeholder="••••••••" />
+                <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full bg-gray-50 border-none rounded-xl px-4 py-3 focus:ring-1 focus:ring-brand-primary outline-none font-bold text-xs" placeholder={isEditing ? 'Оставьте пустым, чтобы не менять' : '••••••••'} autoComplete="new-password" />
               </div>
             </div>
           </div>

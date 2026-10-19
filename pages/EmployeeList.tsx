@@ -1,11 +1,14 @@
 
 import React, { useState } from 'react';
+import { groupsLabel } from '../api/_lib/groups';
+import { useUi } from '../context/UiContext';
 import { useStore } from '../context/StoreContext';
 import { UserPlus, Search, Filter, Edit2, Trash2, MapPin, Briefcase, ChevronRight, BarChart3, ShieldCheck, User, UsersRound } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 export const EmployeeList: React.FC = () => {
   const { employees, positions, deleteEmployee } = useStore();
+  const { notify, confirm } = useUi();
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedPosition, setSelectedPosition] = useState('all');
@@ -20,7 +23,7 @@ export const EmployeeList: React.FC = () => {
   const filteredEmployees = employees.filter(emp => {
     const fullName = String(emp.fullName || '').toLowerCase();
     const login = String(emp.login || '').toLowerCase();
-    const group = String(emp.group || '').toLowerCase();
+    const group = groupsLabel(emp).toLowerCase();
     const searchLower = searchTerm.toLowerCase();
     const areaMatch = selectedAreas.length === 0 || selectedAreas.includes(emp.area.trim());
     const roleMatch = selectedRole === 'all' || emp.role === selectedRole;
@@ -142,7 +145,7 @@ export const EmployeeList: React.FC = () => {
                       <span className="text-[10px] font-black text-brand-secondary uppercase truncate max-w-[120px] block">{position}</span>
                     </td>
                     <td className="px-6 py-4">
-                      <p className="text-[10px] font-black text-brand-secondary uppercase">{emp.group}</p>
+                      <p className="text-[10px] font-black text-brand-secondary uppercase">{groupsLabel(emp)}</p>
                       <p className="text-[8px] text-gray-400 font-bold uppercase">{emp.area}</p>
                     </td>
                     <td className="px-6 py-4">
@@ -154,7 +157,7 @@ export const EmployeeList: React.FC = () => {
                       <div className="flex items-center justify-end gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button onClick={() => navigate(`/employees/${emp.id}/results`)} className="p-1.5 text-gray-300 hover:text-brand-primary transition-colors"><BarChart3 size={14} /></button>
                         <button onClick={() => navigate(`/employees/edit/${emp.id}`)} className="p-1.5 text-gray-300 hover:text-brand-primary transition-colors"><Edit2 size={14} /></button>
-                        <button onClick={() => { if(confirm('Удалить?')) deleteEmployee(emp.id) }} className="p-1.5 text-gray-300 hover:text-brand-primary transition-colors"><Trash2 size={14} /></button>
+                        <button onClick={async () => { if (await confirm('Удалить сотрудника?')) deleteEmployee(emp.id) }} className="p-1.5 text-gray-300 hover:text-brand-primary transition-colors"><Trash2 size={14} /></button>
                       </div>
                     </td>
                   </tr>

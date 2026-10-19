@@ -1,5 +1,8 @@
 
 import React, { useMemo, useState, useEffect } from 'react';
+import { employeeGroups, hasGroup } from '../api/_lib/groups';
+import { teamOf } from '../api/_lib/targeting';
+import { MAX_VIOLATIONS } from '../types';
 import { useStore } from '../context/StoreContext';
 import { QuestionType, Question } from '../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
@@ -29,20 +32,7 @@ export const Analytics: React.FC = () => {
     let baseEmployees = employees;
 
     if (currentRole === 'manager' && currentUser) {
-      const managedAreasNorm = (currentUser.managedAreas || (currentUser.managedArea ? [currentUser.managedArea] : [])).map(a => a.toLowerCase().trim());
-      const mgrGroupNorm = (currentUser.group || "").toLowerCase().trim();
-      const managedGroupsNorm = (currentUser.managedGroups || []).map(g => g.toLowerCase().trim());
-      const hasDefinedGroups = managedGroupsNorm.length > 0;
-      const hasDefinedAreas = managedAreasNorm.length > 0;
-
-      baseEmployees = employees.filter(emp => {
-        if (String(emp.id) === String(currentUser.id)) return false;
-        const empAreaNorm = (emp.area || "").toLowerCase().trim();
-        const empGroupNorm = (emp.group || "").toLowerCase().trim();
-        const matchesArea = !hasDefinedAreas || managedAreasNorm.includes(empAreaNorm);
-        let matchesGroup = hasDefinedGroups ? managedGroupsNorm.includes(empGroupNorm) : empGroupNorm === mgrGroupNorm;
-        return matchesArea && matchesGroup;
-      });
+      baseEmployees = teamOf(currentUser, employees);
 
       const empIds = new Set(baseEmployees.map(e => String(e.id)));
       baseResults = results.filter(r => empIds.has(String(r.userId)));
@@ -60,7 +50,7 @@ export const Analytics: React.FC = () => {
       const emp = accessibleData.employees.find(e => String(e.id) === String(r.userId));
       if (!emp) return false;
       return (selectedArea === 'all' || emp.area === selectedArea) &&
-             (selectedGroup === 'all' || emp.group === selectedGroup) &&
+             (selectedGroup === 'all' || hasGroup(emp, selectedGroup)) &&
              (selectedPosition === 'all' || emp.positionId === selectedPosition) &&
              (selectedQuizId === 'all' || r.quizId === selectedQuizId);
     });
@@ -76,8 +66,8 @@ export const Analytics: React.FC = () => {
     if (filteredResults.length === 0) return { avg: 0, median: 0, passRate: 0, riskRate: 0, violations: 0, attempts: 0 };
     const scores = filteredResults.filter(r => r.status === 'completed').map(r => r.percentage);
     const avg = scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
-    const passed = filteredResults.filter(r => r.percentage >= getPassThreshold(r.quizId) && (r.violations || 0) <= 3).length;
-    const risks = filteredResults.filter(r => r.percentage < 40 || (r.violations || 0) > 3).length;
+    const passed = filteredResults.filter(r => r.percentage >= getPassThreshold(r.quizId) && (r.violations || 0) <= MAX_VIOLATIONS).length;
+    const risks = filteredResults.filter(r => r.percentage < 40 || (r.violations || 0) > MAX_VIOLATIONS).length;
     return { avg, passRate: Math.round((passed / filteredResults.length) * 100), riskRate: Math.round((risks / filteredResults.length) * 100), violations: filteredResults.reduce((a,c)=>a+(c.violations||0), 0), attempts: filteredResults.length };
   }, [filteredResults, sessions, quizzes]);
 
@@ -99,7 +89,7 @@ export const Analytics: React.FC = () => {
     let totalViolations = 0;
     filteredResults.forEach(r => {
       const threshold = getPassThreshold(r.quizId);
-      const isFailed = r.percentage < threshold || (r.violations || 0) > 3;
+      const isFailed = r.percentage < threshold || (r.violations || 0) > MAX_VIOLATIONS;
       if (isFailed && r.status === 'completed') {
         const emp = accessibleData.employees.find(e => String(e.id) === String(r.userId));
         failures.push({
@@ -140,7 +130,7 @@ export const Analytics: React.FC = () => {
   const filteredGroups = useMemo(() => {
     let emps = accessibleData.employees;
     if (selectedArea !== 'all') emps = emps.filter(e => String(e.area || '').trim() === selectedArea);
-    return Array.from(new Set(emps.map(e => String(e.group || '').trim()))).filter(Boolean).sort();
+    return Array.from(new Set(emps.flatMap(e => employeeGroups(e)))).filter(Boolean).sort();
   }, [accessibleData.employees, selectedArea]);
 
   const baseResultsForFilters = useMemo(() => {
@@ -152,7 +142,7 @@ export const Analytics: React.FC = () => {
       const emp = accessibleData.employees.find(e => String(e.id) === String(r.userId));
       if (!emp) return false;
       return (selectedArea === 'all' || emp.area === selectedArea) &&
-             (selectedGroup === 'all' || emp.group === selectedGroup);
+             (selectedGroup === 'all' || hasGroup(emp, selectedGroup));
     });
   }, [accessibleData, dateRange, selectedArea, selectedGroup]);
 

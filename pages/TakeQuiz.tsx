@@ -2,127 +2,150 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useStore } from '../context/StoreContext';
-import { QuestionType, AttemptResult } from '../types';
-import { CheckCircle, ArrowRight, ArrowLeft, Clock, AlertTriangle, ShieldAlert, ShieldCheck, CheckCircle2, XCircle, Trophy } from 'lucide-react';
+import { useUi } from '../context/UiContext';
+import { api, ApiError } from '../services/api';
+import { QuestionType, AttemptResult, Quiz, MAX_VIOLATIONS } from '../types';
+import { CheckCircle, ArrowRight, ArrowLeft, Clock, AlertTriangle, ShieldAlert, ShieldCheck, CheckCircle2, XCircle, Trophy, Loader2 } from 'lucide-react';
 
+type Answer = number[] | string | { from: string, to: string };
+type CheckedInfo = { correct?: boolean; credit?: number; correctAnswers?: number[]; manual?: boolean };
+
+interface AttemptView {
+  attemptId: string;
+  startedAt: number;
+  serverNow: number;
+  session: Quiz;
+  answers: Record<string, Answer>;
+  checked: Record<string, CheckedInfo>;
+  violations: number;
+}
+type StartResponse = AttemptView | { finished: true; result: AttemptResult };
+
+// Попытка живёт на сервере: ответы проверяются и баллы считаются там, а при обновлении страницы она продолжается
 export const TakeQuiz: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { sessions, saveResult, currentUser } = useStore();
-  const [quiz, setQuiz] = useState(sessions.find(q => String(q.id) === String(id)));
+  const { applyResult, currentUser } = useStore();
+  const { notify } = useUi();
+
+  const [quiz, setQuiz] = useState<Quiz | null>(null);
+  const [attemptId, setAttemptId] = useState('');
   const [currentStep, setCurrentStep] = useState(0);
-  const [answers, setAnswers] = useState<Record<string, number[] | string | { from: string, to: string }>>({});
-  const [isFinished, setIsFinished] = useState(false);
+  const [answers, setAnswers] = useState<Record<string, Answer>>({});
+  const [checked, setChecked] = useState<Record<string, CheckedInfo>>({});
+  const [finalResult, setFinalResult] = useState<AttemptResult | null>(null);
+  const [deadline, setDeadline] = useState<number | null>(null);
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
-  const [startTime] = useState(Date.now());
-  
-  // Состояния для мгновенной проверки
-  const [correctCount, setCorrectCount] = useState(0);
-  const [isCurrentQuestionChecked, setIsCurrentQuestionChecked] = useState(false);
-  
+  const [isBusy, setIsBusy] = useState(false);
+
   const [violationCount, setViolationCount] = useState(0);
-  const [violationLogs, setViolationLogs] = useState<string[]>([]);
   const [lastViolationReason, setLastViolationReason] = useState<string>('');
   const [showWarningModal, setShowWarningModal] = useState(false);
-  const MAX_VIOLATIONS = 3; 
-  
-  const timerRef = useRef<number | null>(null);
+
+  const clockOffset = useRef(0);
+  const finishingRef = useRef(false);
+  const isFinished = finalResult !== null;
+
+  const complete = useCallback((result: AttemptResult) => {
+    setFinalResult(result);
+    applyResult(result);
+  }, [applyResult]);
 
   useEffect(() => {
-    if (!quiz) {
-      const found = sessions.find(q => String(q.id) === String(id));
-      if (found) setQuiz(found);
-      else navigate('/active');
-    }
-  }, [id, sessions, quiz, navigate]);
-
-  useEffect(() => {
-    if (quiz && quiz.timeLimit && timeLeft === null) {
-      setTimeLeft(quiz.timeLimit * 60);
-    }
-  }, [quiz, timeLeft]);
-
-  const finishQuiz = useCallback((isForcedViolation = false) => {
-    if (isFinished || !currentUser || !quiz) return;
-    
-    const timeSpent = Math.round((Date.now() - startTime) / 1000);
-    const hasManual = quiz.questions.some(q => q.type === QuestionType.OPEN_ENDED || q.type === QuestionType.RANGE);
-    
-    // В итоговый результат передаем накопленный score
-    const result: AttemptResult = {
-      id: `res-${Date.now()}`, 
-      quizId: quiz.id, 
-      quizTitle: quiz.title, 
-      userId: currentUser.id, 
-      score: isForcedViolation ? 0 : correctCount, 
-      maxPossibleScore: quiz.questions.length,
-      percentage: isForcedViolation ? 0 : Math.round((correctCount / quiz.questions.length) * 100), 
-      date: Date.now(), 
-      status: hasManual ? 'pending' : 'completed',
-      answers, 
-      manualScores: {},
-      questions: quiz.questions,
-      violations: isForcedViolation ? (MAX_VIOLATIONS + 1) : violationCount,
-      violationDetails: violationLogs,
-      timeSpent: timeSpent
-    };
-    
-    saveResult(result);
-    setIsFinished(true);
-    if (timerRef.current) clearInterval(timerRef.current);
-  }, [isFinished, currentUser, quiz, answers, violationCount, violationLogs, saveResult, startTime, correctCount]);
-
-  useEffect(() => {
-    const handleViolation = (reason: string) => {
-      if (isFinished) return;
-      
-      const userMessage = reason === "visibility" ? "Вы свернули вкладку или переключили окно" : "Вы вставили скопированный текст";
-      setViolationLogs(prev => [...prev, `${new Date().toLocaleTimeString()}: ${userMessage}`]);
-      setLastViolationReason(userMessage);
-      
-      setViolationCount(prev => {
-        const next = prev + 1;
-        if (next > MAX_VIOLATIONS) {
-          finishQuiz(true); 
-        } else {
-          setShowWarningModal(true);
-        }
-        return next;
+    let cancelled = false;
+    api.post<StartResponse>('/api/attempt', { action: 'start', sessionId: id })
+      .then(res => {
+        if (cancelled) return;
+        if ('finished' in res) { complete(res.result); return; }
+        clockOffset.current = res.serverNow - Date.now();
+        setQuiz(res.session);
+        setAttemptId(res.attemptId);
+        setAnswers(res.answers);
+        setChecked(res.checked);
+        setViolationCount(res.violations);
+        const firstOpen = res.session.questions.findIndex(q => !res.checked[q.id]);
+        setCurrentStep(firstOpen === -1 ? Math.max(0, res.session.questions.length - 1) : firstOpen);
+        if (res.session.timeLimit) setDeadline(res.startedAt + res.session.timeLimit * 60000);
+      })
+      .catch(e => {
+        if (cancelled) return;
+        notify(e instanceof ApiError ? e.message : 'Не удалось начать аттестацию');
+        navigate('/active');
       });
+    return () => { cancelled = true; };
+  }, [id]);
+
+  const finishQuiz = useCallback(async (draft?: { questionId: string; answer: Answer }) => {
+    if (finishingRef.current || !attemptId) return;
+    finishingRef.current = true;
+    try {
+      const res = await api.post<{ result: AttemptResult }>('/api/attempt', { action: 'finish', attemptId, draft });
+      complete(res.result);
+    } catch (e) {
+      finishingRef.current = false;
+      notify(e instanceof ApiError ? e.message : 'Не удалось завершить аттестацию');
+    }
+  }, [attemptId, complete, notify]);
+
+  // таймер считается от времени старта на сервере, поэтому обновление страницы его не сбрасывает
+  useEffect(() => {
+    if (deadline === null || isFinished) return;
+    const tick = () => {
+      const left = Math.max(0, Math.round((deadline - (Date.now() + clockOffset.current)) / 1000));
+      setTimeLeft(left);
+      if (left === 0) {
+        const q = quiz?.questions[currentStep];
+        const draft = q && !checked[q.id] && q.type === QuestionType.OPEN_ENDED && typeof answers[q.id] === 'string'
+          ? { questionId: q.id, answer: answers[q.id] } : undefined;
+        finishQuiz(draft);
+      }
+    };
+    tick();
+    const timer = window.setInterval(tick, 1000);
+    return () => window.clearInterval(timer);
+  }, [deadline, isFinished, finishQuiz, quiz, currentStep, checked, answers]);
+
+  useEffect(() => {
+    if (!attemptId || isFinished) return;
+
+    const handleViolation = async (reason: 'visibility' | 'paste') => {
+      setLastViolationReason(reason === 'visibility' ? 'Вы свернули вкладку или переключили окно' : 'Вы вставили скопированный текст');
+      try {
+        const res = await api.post<{ violations: number; finished?: boolean; result?: AttemptResult }>('/api/attempt', { action: 'violation', attemptId, reason });
+        setViolationCount(res.violations);
+        if (res.finished && res.result) complete(res.result);
+        else setShowWarningModal(true);
+      } catch { /* нарушение фиксируется при следующей успешной связи */ }
     };
 
     const handleVisibilityChange = () => {
-      if (document.hidden) handleViolation("visibility");
+      if (document.hidden) handleViolation('visibility');
     };
-
     const handlePaste = (e: ClipboardEvent) => {
       e.preventDefault();
-      handleViolation("paste");
+      handleViolation('paste');
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
     document.addEventListener('paste', handlePaste);
-
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       document.removeEventListener('paste', handlePaste);
     };
-  }, [isFinished, finishQuiz]);
+  }, [attemptId, isFinished, complete]);
 
-  useEffect(() => {
-    if (timeLeft !== null && timeLeft > 0 && !isFinished) {
-      timerRef.current = window.setInterval(() => {
-        setTimeLeft(prev => (prev !== null && prev > 0 ? prev - 1 : 0));
-      }, 1000);
-    } else if (timeLeft === 0 && !isFinished) {
-      finishQuiz();
-    }
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, [timeLeft, isFinished, finishQuiz]);
+  // сумма баллов за проверенные вопросы (за частично верный многовыборный ответ начисляется доля)
+  const correctCount = Math.round((Object.values(checked) as CheckedInfo[]).reduce((sum, c) => sum + (c.credit ?? (c.correct ? 1 : 0)), 0) * 100) / 100;
 
-  if (!quiz || !currentUser) return null;
+  if (!currentUser) return null;
+
+  if (!quiz && !finalResult) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh] text-gray-300">
+        <Loader2 className="animate-spin" size={32} />
+      </div>
+    );
+  }
 
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);
@@ -131,7 +154,7 @@ export const TakeQuiz: React.FC = () => {
   };
 
   const handleSelectOption = (qId: string, optIndex: number, type: QuestionType) => {
-    if (isCurrentQuestionChecked) return; // Запрещаем менять ответ после проверки
+    if (checked[qId]) return; // после проверки ответ менять нельзя
 
     setAnswers(prev => {
       const currentSelected = (prev[qId] as number[]) || [];
@@ -140,41 +163,36 @@ export const TakeQuiz: React.FC = () => {
     });
   };
 
-  const checkCurrentAnswer = () => {
+  const checkCurrentAnswer = async () => {
+    if (!quiz || isBusy) return;
     const q = quiz.questions[currentStep];
-    if (q.type === QuestionType.OPEN_ENDED || q.type === QuestionType.RANGE) {
-        setIsCurrentQuestionChecked(true);
-        return;
+    if (!isAnswered(q.id, q.type)) {
+      notify('Выберите вариант ответа', 'info');
+      return;
     }
-
-    const userAns = (answers[q.id] as number[]) || [];
-    if (userAns.length === 0) {
-        alert("Выберите вариант ответа");
-        return;
+    setIsBusy(true);
+    try {
+      const res = await api.post<CheckedInfo & { finished?: boolean; result?: AttemptResult }>('/api/attempt', {
+        action: 'check', attemptId, questionId: q.id, answer: answers[q.id]
+      });
+      if (res.finished && res.result) { complete(res.result); return; }
+      setChecked(prev => ({ ...prev, [q.id]: res.manual ? { manual: true } : { correct: res.correct, credit: res.credit, correctAnswers: res.correctAnswers } }));
+    } catch (e) {
+      notify(e instanceof ApiError ? e.message : 'Не удалось проверить ответ');
+    } finally {
+      setIsBusy(false);
     }
-
-    const correct = q.correctAnswers;
-    const isCorrect = q.type === QuestionType.SINGLE_CHOICE 
-        ? (userAns[0] === correct[0]) 
-        : (userAns.length === correct.length && userAns.every(v => correct.includes(v)));
-
-    if (isCorrect) {
-        setCorrectCount(prev => prev + 1);
-    }
-    setIsCurrentQuestionChecked(true);
   };
 
-  const nextStep = () => {
-    if (currentStep < quiz.questions.length - 1) {
-        setCurrentStep(prev => prev + 1);
-        setIsCurrentQuestionChecked(false);
-    } else {
-        finishQuiz();
-    }
+  const isAnswered = (qId: string, type: QuestionType) => {
+    const a = answers[qId];
+    if (type === QuestionType.OPEN_ENDED) return typeof a === 'string' && a.trim() !== '';
+    if (type === QuestionType.RANGE) return !!a && typeof a === "object" && !Array.isArray(a) && (String(a.from ?? "").trim() !== "" || String(a.to ?? "").trim() !== "");
+    return Array.isArray(a) && a.length > 0;
   };
 
   if (isFinished) {
-    const isDisqualified = violationCount > MAX_VIOLATIONS;
+    const isDisqualified = (finalResult.violations || 0) > MAX_VIOLATIONS;
     return (
       <div className="max-w-md mx-auto bg-white rounded-[40px] shadow-2xl p-12 text-center animate-fade-in border border-gray-100">
         {isDisqualified ? (
@@ -194,7 +212,7 @@ export const TakeQuiz: React.FC = () => {
             </div>
             <h2 className="text-2xl font-black text-brand-secondary mb-3 uppercase tracking-tight">Завершено</h2>
             <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-1 shadow-sm">
-                Результат: {correctCount} из {quiz.questions.length}
+                Результат: {finalResult.score} из {finalResult.maxPossibleScore}
             </p>
             <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-10">Ваши ответы приняты системой Belinda.</p>
           </>
@@ -204,8 +222,17 @@ export const TakeQuiz: React.FC = () => {
     );
   }
 
+  if (!quiz || quiz.questions.length === 0) {
+    return (
+      <div className="max-w-md mx-auto p-12 text-center text-gray-400 font-black text-xs uppercase tracking-widest">В этой аттестации нет вопросов</div>
+    );
+  }
+
+  const isCurrentQuestionChecked = !!checked[quiz.questions[currentStep].id];
+  const nextStep = () => setCurrentStep(prev => Math.min(prev + 1, quiz.questions.length - 1));
+
   const currentQuestion = quiz.questions[currentStep];
-  const hasSelected = !!answers[currentQuestion.id];
+  const hasSelected = isAnswered(currentQuestion.id, currentQuestion.type);
 
   return (
     <div className="max-w-2xl mx-auto pb-20 space-y-4 relative">
@@ -257,15 +284,14 @@ export const TakeQuiz: React.FC = () => {
            {isCurrentQuestionChecked && currentQuestion.type !== QuestionType.OPEN_ENDED && currentQuestion.type !== QuestionType.RANGE && (
              <div className="animate-fade-in">
                 {(() => {
-                    const userAns = (answers[currentQuestion.id] as number[]) || [];
-                    const correct = currentQuestion.correctAnswers;
-                    const isCorrect = currentQuestion.type === QuestionType.SINGLE_CHOICE 
-                        ? (userAns[0] === correct[0]) 
-                        : (userAns.length === correct.length && userAns.every(v => correct.includes(v)));
+                    const info = checked[currentQuestion.id];
+                    const credit = info?.credit ?? (info?.correct ? 1 : 0);
+                    const isCorrect = credit === 1;
+                    const isPartial = credit > 0 && credit < 1;
                     return (
-                        <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-2 ${isCorrect ? 'bg-green-50 text-green-600 border border-green-100' : 'bg-red-50 text-brand-primary border border-red-100'}`}>
-                            {isCorrect ? <CheckCircle2 size={14} /> : <XCircle size={14} />}
-                            {isCorrect ? 'Верно' : 'Ошибка'}
+                        <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-2 ${isCorrect ? "bg-green-50 text-green-600 border border-green-100" : isPartial ? "bg-amber-50 text-amber-600 border border-amber-100" : "bg-red-50 text-brand-primary border border-red-100"}`}>
+                            {isCorrect ? <CheckCircle2 size={14} /> : isPartial ? <AlertTriangle size={14} /> : <XCircle size={14} />}
+                            {isCorrect ? "Верно" : isPartial ? `Частично (${Math.round(credit * 100)}%)` : "Ошибка"}
                         </span>
                     );
                 })()}
@@ -304,7 +330,7 @@ export const TakeQuiz: React.FC = () => {
               {currentQuestion.options.map((opt, idx) => {
                 const userAns = (answers[currentQuestion.id] as number[] || []);
                 const isSelected = userAns.includes(idx);
-                const isCorrectOption = (currentQuestion.correctAnswers || []).includes(idx);
+                const isCorrectOption = (checked[currentQuestion.id]?.correctAnswers || []).includes(idx);
                 
                 let btnStyle = "border-gray-50 bg-gray-50 hover:bg-white hover:border-gray-200 shadow-sm";
                 let checkStyle = "bg-white border-gray-200";
@@ -349,13 +375,8 @@ export const TakeQuiz: React.FC = () => {
 
       <div className="flex justify-between items-center px-4 pt-4">
         <button 
-          onClick={() => {
-              if (currentStep > 0) {
-                  setCurrentStep(prev => prev - 1);
-                  setIsCurrentQuestionChecked(true); // Предыдущие уже проверены
-              }
-          }} 
-          disabled={currentStep === 0 || !isCurrentQuestionChecked} 
+          onClick={() => setCurrentStep(prev => Math.max(0, prev - 1))} 
+          disabled={currentStep === 0} 
           className="flex items-center gap-2 px-6 py-4 text-gray-400 font-black text-[11px] uppercase tracking-widest disabled:opacity-0 hover:text-brand-secondary transition-colors"
         >
           <ArrowLeft size={18} /> Назад
@@ -364,7 +385,7 @@ export const TakeQuiz: React.FC = () => {
         {!isCurrentQuestionChecked ? (
            <button 
              onClick={checkCurrentAnswer} 
-             disabled={!hasSelected}
+             disabled={!hasSelected || isBusy}
              className="bg-brand-secondary text-white px-10 py-5 rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-xl hover:bg-brand-primary transition-all flex items-center gap-3 border-b-4 border-black disabled:opacity-50 disabled:translate-y-0 disabled:border-b-0 active:translate-y-1 active:border-b-0"
            >
              Проверить <CheckCircle2 size={20} />

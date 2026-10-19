@@ -1,5 +1,6 @@
 
 import React from 'react';
+import { MAX_VIOLATIONS } from '../types';
 import { useStore } from '../context/StoreContext';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { CheckCircle2, XCircle, Hourglass, ExternalLink, Award, Target, TrendingUp, ShieldAlert, Sparkles } from 'lucide-react';
@@ -17,7 +18,7 @@ export const Results: React.FC = () => {
   const myResults = currentUser ? results.filter(r => r.userId === currentUser.id) : [];
 
   const chartData = myResults
-    .filter(r => r.status === 'completed' && (r.violations || 0) <= 3)
+    .filter(r => r.status === 'completed' && (r.violations || 0) <= MAX_VIOLATIONS)
     .slice(0, 10)
     .reverse()
     .map(r => ({
@@ -41,7 +42,7 @@ export const Results: React.FC = () => {
           </button>
           <div className="bg-gray-50 px-3 py-1.5 rounded-xl border flex items-center gap-2">
              <Award className="text-brand-primary" size={14} />
-             <span className="text-[9px] font-black uppercase text-brand-secondary">Топ-баллы: {myResults.filter(r=>r.percentage>=90 && (r.violations || 0) <= 3).length}</span>
+             <span className="text-[9px] font-black uppercase text-brand-secondary">Топ-баллы: {myResults.filter(r=>r.percentage>=90 && (r.violations || 0) <= MAX_VIOLATIONS).length}</span>
           </div>
         </div>
       </div>
@@ -59,8 +60,8 @@ export const Results: React.FC = () => {
           <div>
             <p className="text-gray-400 text-[8px] font-black uppercase tracking-widest leading-none mb-1">Средний</p>
             <p className="text-lg md:text-xl font-black text-white">
-              {myResults.filter(r => r.status === 'completed' && (r.violations || 0) <= 3).length > 0 
-                ? Math.round(myResults.filter(r => r.status === 'completed' && (r.violations || 0) <= 3).reduce((acc, curr) => acc + curr.percentage, 0) / myResults.filter(r => r.status === 'completed' && (r.violations || 0) <= 3).length) 
+              {myResults.filter(r => r.status === 'completed' && (r.violations || 0) <= MAX_VIOLATIONS).length > 0 
+                ? Math.round(myResults.filter(r => r.status === 'completed' && (r.violations || 0) <= MAX_VIOLATIONS).reduce((acc, curr) => acc + curr.percentage, 0) / myResults.filter(r => r.status === 'completed' && (r.violations || 0) <= MAX_VIOLATIONS).length) 
                 : 0}%
             </p>
           </div>
@@ -70,7 +71,7 @@ export const Results: React.FC = () => {
           <div>
             <p className="text-gray-400 text-[8px] font-black uppercase tracking-widest leading-none mb-1">Успешно</p>
             <p className="text-xl font-black text-green-600">
-              {myResults.filter(r => r.status === 'completed' && r.percentage >= getPassThreshold(r.quizId) && (r.violations || 0) <= 3).length}
+              {myResults.filter(r => r.status === 'completed' && r.percentage >= getPassThreshold(r.quizId) && (r.violations || 0) <= MAX_VIOLATIONS).length}
             </p>
           </div>
         </div>
@@ -92,7 +93,7 @@ export const Results: React.FC = () => {
             </thead>
             <tbody className="divide-y divide-gray-50 font-bold">
               {myResults.map((result) => {
-                const isDisqualified = (result.violations || 0) > 3;
+                const isDisqualified = (result.violations || 0) > MAX_VIOLATIONS;
                 return (
                   <tr key={result.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-4 py-3">

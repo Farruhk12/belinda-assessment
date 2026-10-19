@@ -1,5 +1,6 @@
 
 import React, { useState } from 'react';
+import { MAX_VIOLATIONS } from '../types';
 import { useStore } from '../context/StoreContext';
 import { Link } from 'react-router-dom';
 import { ClipboardCheck, User, Calendar, ArrowRight, AlertCircle, CheckCircle2, History, Search, Pencil, ShieldAlert } from 'lucide-react';
@@ -77,7 +78,7 @@ export const ReviewList: React.FC = () => {
             const employee = employees.find(e => String(e.id) === String(result.userId));
             const isReviewed = result.status === 'completed';
             const violationCount = result.violations || 0;
-            const isDisqualified = violationCount > 3;
+            const isDisqualified = violationCount > MAX_VIOLATIONS;
             
             return (
               <div key={result.id} className="bg-white rounded-2xl border border-gray-100 p-4 flex items-center justify-between shadow-sm hover:shadow-md hover:border-brand-primary/30 transition-all group">

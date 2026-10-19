@@ -1,0 +1,75 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  font-family: 'Inter', sans-serif;
+  background-color: #f3f6fc;
+  color: #1e293b;
+  -webkit-font-smoothing: antialiased;
+}
+html.dark body {
+  background-color: #111827;
+  color: #f3f4f6;
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Кастомный скроллбар */
+.custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 10px; }
+.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.2); }
+
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+/*
+ * Тёмная тема для страниц, где цвета заданы без dark:-вариантов
+ * (карточки bg-white, поля bg-gray-50, тёмно-серый текст бренда).
+ */
+html.dark .bg-white { background-color: #1f2937; }
+html.dark .bg-gray-50,
+html.dark .bg-gray-100,
+html.dark .bg-gray-50\/50,
+html.dark .bg-gray-50\/30 { background-color: #374151; }
+html.dark .border-gray-50,
+html.dark .border-gray-100,
+html.dark .border-gray-200,
+html.dark .divide-gray-50 > :not([hidden]) ~ :not([hidden]) { border-color: #374151; }
+html.dark .text-brand-secondary { color: #e5e7eb; }
+html.dark .text-gray-500 { color: #9ca3af; }
+html.dark .bg-red-50 { background-color: rgba(223, 59, 32, 0.15); }
+html.dark .bg-green-50 { background-color: rgba(34, 197, 94, 0.15); }
+
+/*
+ * Бледные серые тексты (gray-200/300/400) плохо читались на белых карточках,
+ * поэтому подписи, счётчики и иконки теперь заметно контрастнее.
+ */
+html .text-gray-200 { color: #8a97ad; }
+html .text-gray-300 { color: #75849c; }
+html .text-gray-400 { color: #5a6a83; }
+html .text-gray-500 { color: #44546d; }
+html.dark .text-gray-200 { color: #6b7280; }
+html.dark .text-gray-300 { color: #9ca3af; }
+html.dark .text-gray-400 { color: #aab3c2; }
+html.dark .text-gray-500 { color: #cbd5e1; }
+
+/* карточки чуть приподняты и чётче отделены от фона */
+.bg-white.rounded-xl, .bg-white.rounded-2xl, .bg-white.rounded-3xl { border-color: #e3e9f4; }
+
+/* на тёмных панелях бренда серые подписи, наоборот, должны быть светлыми */
+.bg-brand-secondary .text-gray-200,
+.bg-brand-secondary .text-gray-300,
+.bg-brand-secondary .text-gray-400,
+.bg-brand-secondary .text-gray-500,
+.bg-brand-secondary.text-gray-400,
+.bg-brand-primary .text-gray-400 { color: #b4c0d4; }

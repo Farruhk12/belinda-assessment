@@ -61,7 +61,8 @@ export interface Employee {
   fullName: string;
   login: string;
   password?: string;
-  group: string;
+  group: string;       // все группы через запятую (для отображения и старых назначений)
+  groups?: string[];   // все группы сотрудника
   area: string;
   positionId: string;
   role: 'admin' | 'employee' | 'manager'; 
@@ -88,3 +89,6 @@ export interface Assignment {
   assignedAt: number;
   isRetake?: boolean;
 }
+
+/** Допустимое число нарушений во время аттестации; следующее аннулирует тест */
+export const MAX_VIOLATIONS = 3;

@@ -1,5 +1,7 @@
 
 import React from 'react';
+import { questionCredit } from '../api/_lib/scoring';
+import { MAX_VIOLATIONS } from '../types';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useStore } from '../context/StoreContext';
 import { QuestionType, Question } from '../types';
@@ -54,7 +56,7 @@ export const ResultDetail: React.FC = () => {
 
   const displayTitle = String(result.quizTitle || fallbackQuiz?.title || "Аттестация");
   const violationCount = result.violations || 0;
-  const isDisqualified = violationCount > 3;
+  const isDisqualified = violationCount > MAX_VIOLATIONS;
 
   return (
     <div className="max-w-3xl mx-auto space-y-4 md:space-y-8 pb-24 animate-fade-in px-2 md:px-0">
@@ -118,22 +120,19 @@ export const ResultDetail: React.FC = () => {
           questionsToDisplay.map((q, idx) => {
             const userAnswer = result.answers[q.id];
             let isCorrect = false;
+            let credit = 0;
 
             if (q.type === QuestionType.OPEN_ENDED || q.type === QuestionType.RANGE) {
               isCorrect = (result.manualScores?.[q.id] || 0) >= 3;
             } else {
-              const userAnsArr = (userAnswer as number[]) || [];
-              const correctArr = q.correctAnswers || [];
-              if (q.type === QuestionType.SINGLE_CHOICE) {
-                isCorrect = userAnsArr[0] === correctArr[0];
-              } else {
-                isCorrect = userAnsArr.length === correctArr.length && userAnsArr.every(v => correctArr.includes(v));
-              }
+              credit = questionCredit(q, (userAnswer as number[]) || []);
+              isCorrect = credit === 1;
             }
+            const isPartial = credit > 0 && credit < 1;
 
             return (
               <div key={q.id} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden flex flex-col relative">
-                <div className={`w-1 h-full absolute top-0 left-0 ${isCorrect ? 'bg-green-500' : 'bg-brand-primary'}`}></div>
+                <div className={`w-1 h-full absolute top-0 left-0 ${isCorrect ? 'bg-green-500' : isPartial ? 'bg-amber-500' : 'bg-brand-primary'}`}></div>
                 <div className="p-3.5 pl-4">
                   <div className="flex justify-between items-center mb-2 gap-2">
                     <div className="flex items-center gap-1.5">
@@ -144,9 +143,9 @@ export const ResultDetail: React.FC = () => {
                         {q.type}
                       </span>
                     </div>
-                    <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[7px] font-black uppercase tracking-widest shrink-0 ${isCorrect ? 'bg-green-50 text-green-600 border border-green-100' : 'bg-red-50 text-brand-primary border border-red-100'}`}>
+                    <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[7px] font-black uppercase tracking-widest shrink-0 ${isCorrect ? 'bg-green-50 text-green-600 border border-green-100' : isPartial ? 'bg-amber-50 text-amber-600 border border-amber-100' : 'bg-red-50 text-brand-primary border border-red-100'}`}>
                       {isCorrect ? <CheckCircle2 size={10} /> : <XCircle size={10} />}
-                      {isCorrect ? 'Верно' : 'Неверно'}
+                      {isCorrect ? 'Верно' : isPartial ? `Частично ${Math.round(credit * 100)}%` : 'Неверно'}
                     </div>
                   </div>
                   

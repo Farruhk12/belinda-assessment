@@ -13,7 +13,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-  const { currentRole, currentUser, logoutUser, isLoading, sheetsUrl } = useStore();
+  const { currentRole, currentUser, logoutUser, isLoading } = useStore();
   const { theme, toggleTheme } = useTheme();
 
   const adminNav = [

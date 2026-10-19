@@ -1,5 +1,7 @@
 
 import React, { useState } from 'react';
+import { questionCredit } from '../api/_lib/scoring';
+import { useUi } from '../context/UiContext';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useStore } from '../context/StoreContext';
 import { QuestionType } from '../types';
@@ -10,6 +12,7 @@ export const ReviewAttempt: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { results, sessions, updateResult, employees } = useStore();
+  const { notify } = useUi();
 
   const result = results.find(r => r.id === id);
   const quiz = sessions.find(q => q.id === result?.quizId);
@@ -26,7 +29,7 @@ export const ReviewAttempt: React.FC = () => {
 
   const handleSaveReview = () => {
     if (Object.keys(manualScores).length < manualGradingQuestions.length) { 
-      alert("Пожалуйста, оцените все открытые вопросы перед сохранением."); 
+      notify("Пожалуйста, оцените все открытые вопросы перед сохранением."); 
       return; 
     }
 
@@ -36,20 +39,15 @@ export const ReviewAttempt: React.FC = () => {
     quiz.questions.forEach(q => {
       if (q.type !== QuestionType.OPEN_ENDED && q.type !== QuestionType.RANGE) {
         maxPoints += 1;
-        const userAns = (result.answers[q.id] as number[]) || [];
-        const correct = q.correctAnswers;
-        
-        const isCorrect = q.type === QuestionType.SINGLE_CHOICE 
-          ? (userAns[0] === correct[0]) 
-          : (userAns.length === correct.length && userAns.every(v => correct.includes(v)));
-        
-        if (isCorrect) earnedPoints += 1;
+        earnedPoints += questionCredit(q, (result.answers[q.id] as number[]) || []);
       } else {
         // Каждый ручной вопрос оценивается до 5 баллов
         maxPoints += 5;
         earnedPoints += manualScores[q.id] || 0;
       }
     });
+
+    earnedPoints = Math.round(earnedPoints * 100) / 100;
 
     updateResult(result.id, { 
       status: 'completed', 
@@ -75,7 +73,7 @@ export const ReviewAttempt: React.FC = () => {
       setManualScores(prev => ({ ...prev, [questionId]: score }));
       setManualComments(prev => ({ ...prev, [questionId]: comment }));
     } catch (err) {
-      alert('Не удалось получить оценку от ИИ. Проверьте подключение и ключ API.');
+      notify('Не удалось получить оценку от ИИ. Проверьте подключение и ключ API.');
     } finally {
       setAiLoadingQuestionId(null);
     }
